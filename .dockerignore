@@ -1,0 +1,7 @@
+target
+ui/node_modules
+ui/dist
+desktop/src-tauri/target
+desktop/src-tauri/gen
+.git
+crates/api-server/data

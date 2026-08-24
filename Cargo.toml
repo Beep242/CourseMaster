@@ -1,0 +1,40 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/academic-core",
+    "crates/ai-engine",
+    "crates/api-server",
+    "crates/document-engine",
+    "crates/scheduler",
+    "desktop/src-tauri",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["CourseMaster Contributors"]
+license = "Proprietary"
+repository = "https://github.com/Beep242/CourseMaster"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "time", "fs", "io-util", "net", "signal"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "chrono", "uuid", "migrate", "macros"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+academic-core = { path = "crates/academic-core" }
+ai-engine = { path = "crates/ai-engine" }
+api-server = { path = "crates/api-server" }
+document-engine = { path = "crates/document-engine" }
+scheduler = { path = "crates/scheduler" }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true

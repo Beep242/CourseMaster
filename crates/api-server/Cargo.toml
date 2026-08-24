@@ -1,0 +1,26 @@
+[package]
+name = "api-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "coursemaster-api"
+path = "src/main.rs"
+
+[dependencies]
+academic-core.workspace = true
+ai-engine.workspace = true
+document-engine.workspace = true
+scheduler.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tokio.workspace = true
+chrono.workspace = true
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
+jsonwebtoken = "9"

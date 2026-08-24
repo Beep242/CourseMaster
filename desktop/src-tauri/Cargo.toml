@@ -1,0 +1,27 @@
+[package]
+name = "course-master"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "course_master_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "course-master"
+path = "src/main.rs"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tauri = { version = "2", features = [] }

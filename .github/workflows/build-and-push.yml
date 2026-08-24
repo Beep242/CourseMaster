@@ -1,0 +1,74 @@
+name: Build and push production image
+
+# Builds the single CourseMaster image (Rust API + built frontend) and
+# pushes it to GHCR, then SSHes into the VPS to pull and restart — mirrors
+# the pattern already in use for TruthSeeker. GITHUB_TOKEN already has
+# package-write permission for this repo's own GHCR namespace.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    name: Build and push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lowercase image name
+        id: image
+        run: |
+          owner="${{ github.repository_owner }}"
+          echo "name=${REGISTRY}/${owner,,}/coursemaster-api" >> "$GITHUB_OUTPUT"
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          build-args: |
+            VITE_PORTFOLIO_URL=https://iambeep.com
+            VITE_API_BASE_URL=https://coursemaster.iambeep.com/api
+          tags: |
+            ${{ steps.image.outputs.name }}:latest
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to VPS
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull new image and restart
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/coursemaster
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans

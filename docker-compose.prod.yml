@@ -1,0 +1,39 @@
+# Production deploy: pulls the pre-built image from GHCR (see
+# .github/workflows/build-and-push.yml) instead of compiling on the VPS.
+#
+# Usage on the server:
+#   cp .env.example .env        # then fill in real secrets — see DEPLOY.md
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml exec api claude setup-token
+#     (one-time — follow the printed URL to authorize; the resulting
+#     credentials persist in the claude-config volume across restarts/updates)
+#
+# Set GHCR_OWNER in .env to your GitHub username/org, lowercase.
+
+services:
+  api:
+    image: ghcr.io/${GHCR_OWNER:-beep242}/coursemaster-api:latest
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      SQLITE_PATH: /app/data/coursemaster.db
+      AI_SCRATCH_DIR: /app/data/ai-scratch
+      CROSS_APP_JWT_SECRET: ${CROSS_APP_JWT_SECRET:?set CROSS_APP_JWT_SECRET in .env}
+      CROSS_APP_JWT_ISSUER: ${CROSS_APP_JWT_ISSUER:-iambeep.com}
+      CROSS_APP_JWT_AUDIENCE: ${CROSS_APP_JWT_AUDIENCE:-coursemaster}
+      OWNER_EMAIL: ${OWNER_EMAIL:?set OWNER_EMAIL in .env}
+      WEB_ALLOWED_ORIGINS: ${WEB_ALLOWED_ORIGINS:-https://coursemaster.iambeep.com}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-}
+    volumes:
+      - coursemaster-data:/app/data
+      - claude-config:/root/.claude
+    # Loopback-only, same pattern as the other suite apps' Postgres binding —
+    # never reachable from the internet directly. The shared Caddy instance
+    # reaches it at 127.0.0.1:8080 — see DEPLOY.md for the exact site block.
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  coursemaster-data:
+  claude-config:
