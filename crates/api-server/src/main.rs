@@ -75,7 +75,9 @@ async fn main() {
         .route("/prioritized", get(handlers::scheduler::prioritized_today))
         .route("/calendar-feeds", get(handlers::calendar::list_feeds).post(handlers::calendar::create_feed))
         .route("/calendar-feeds/{id}/sync", post(handlers::calendar::sync_feed))
-        .route("/calendar-feeds/{id}/syllabi", get(handlers::calendar::list_feed_batches));
+        .route("/calendar-feeds/{id}/syllabi", get(handlers::calendar::list_feed_batches))
+        .route("/calendar-feeds/{id}/detected-courses", get(handlers::calendar::detected_courses))
+        .route("/calendar-feeds/link-course", post(handlers::calendar::link_course));
 
     let allowed_origins: Vec<_> = env_or("WEB_ALLOWED_ORIGINS", "http://localhost:1430")
         .split(',')

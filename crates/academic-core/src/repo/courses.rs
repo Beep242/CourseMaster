@@ -17,10 +17,12 @@ fn row_to_course(r: sqlx::sqlite::SqliteRow) -> Result<Course, CoreError> {
         current_grade: r.try_get("current_grade")?,
         office_hours: r.try_get("office_hours")?,
         late_policy: r.try_get("late_policy")?,
+        external_org_unit_id: r.try_get("external_org_unit_id")?,
     })
 }
 
-const COLUMNS: &str = "id, semester_id, name, code, professor_name, professor_email, credit_hours, color, current_grade, office_hours, late_policy";
+const COLUMNS: &str = "id, semester_id, name, code, professor_name, professor_email, credit_hours, color, current_grade, \
+    office_hours, late_policy, external_org_unit_id";
 
 pub async fn create(pool: &SqlitePool, input: NewCourse) -> Result<Course, CoreError> {
     if input.name.trim().is_empty() {
@@ -28,8 +30,8 @@ pub async fn create(pool: &SqlitePool, input: NewCourse) -> Result<Course, CoreE
     }
     let id = new_id();
     sqlx::query(
-        "INSERT INTO courses (id, semester_id, name, code, professor_name, professor_email, credit_hours, color) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO courses (id, semester_id, name, code, professor_name, professor_email, credit_hours, color, external_org_unit_id) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&id)
     .bind(&input.semester_id)
@@ -39,9 +41,18 @@ pub async fn create(pool: &SqlitePool, input: NewCourse) -> Result<Course, CoreE
     .bind(&input.professor_email)
     .bind(input.credit_hours)
     .bind(input.color.unwrap_or_else(|| "#8b5cf6".to_string()))
+    .bind(&input.external_org_unit_id)
     .execute(pool)
     .await?;
     get(pool, &id).await?.ok_or_else(|| CoreError::NotFound(id))
+}
+
+pub async fn find_by_org_unit_id(pool: &SqlitePool, org_unit_id: &str) -> Result<Option<Course>, CoreError> {
+    let row = sqlx::query(&format!("SELECT {COLUMNS} FROM courses WHERE external_org_unit_id = ?"))
+        .bind(org_unit_id)
+        .fetch_optional(pool)
+        .await?;
+    row.map(row_to_course).transpose()
 }
 
 pub async fn get(pool: &SqlitePool, id: &str) -> Result<Option<Course>, CoreError> {

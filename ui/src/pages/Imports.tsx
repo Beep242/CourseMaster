@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import invoke from "../api";
-import type { CalendarFeed, Course, Syllabus, SyllabusExtraction } from "../types";
+import type { CalendarFeed, Course, DetectedCourseGroup, Semester, Syllabus, SyllabusExtraction } from "../types";
 import { IconCalendar, IconCheck, IconInbox, IconPlus, IconRefresh, IconX } from "../icons";
 
 interface BatchWithExtractions {
@@ -8,12 +8,26 @@ interface BatchWithExtractions {
   extractions: SyllabusExtraction[];
 }
 
+interface GroupDraft {
+  name: string;
+  code: string;
+  semesterId: string;
+}
+
+function groupKey(group: DetectedCourseGroup): string {
+  return group.org_unit_id ?? group.location;
+}
+
 export function Imports() {
   const [feeds, setFeeds] = useState<CalendarFeed[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [semesters, setSemesters] = useState<Semester[]>([]);
   const [batchesByFeed, setBatchesByFeed] = useState<Record<string, BatchWithExtractions[]>>({});
+  const [detectedByFeed, setDetectedByFeed] = useState<Record<string, DetectedCourseGroup[]>>({});
+  const [drafts, setDrafts] = useState<Record<string, GroupDraft>>({});
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [creatingGroup, setCreatingGroup] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
@@ -36,17 +50,40 @@ export function Imports() {
     setBatchesByFeed((prev) => ({ ...prev, [feedId]: withExtractions.filter((b) => b.extractions.length > 0) }));
   }
 
+  async function loadDetectedFor(feedId: string, defaultSemesterId: string) {
+    try {
+      const groups = await invoke<DetectedCourseGroup[]>("detected_courses", { feedId });
+      setDetectedByFeed((prev) => ({ ...prev, [feedId]: groups }));
+      setDrafts((prev) => {
+        const next = { ...prev };
+        for (const group of groups) {
+          const key = groupKey(group);
+          if (!next[key]) {
+            next[key] = { name: group.suggested_name, code: group.suggested_code ?? "", semesterId: defaultSemesterId };
+          }
+        }
+        return next;
+      });
+    } catch (e) {
+      // A feed with a dead/expired token shouldn't block the rest of the page from rendering.
+      setError(String(e));
+    }
+  }
+
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      const [feedList, courseList] = await Promise.all([
+      const [feedList, courseList, semesterList] = await Promise.all([
         invoke<CalendarFeed[]>("list_calendar_feeds"),
         invoke<Course[]>("list_courses", { semesterId: null }),
+        invoke<Semester[]>("list_semesters"),
       ]);
       setFeeds(feedList);
       setCourses(courseList);
-      await Promise.all(feedList.map((f) => loadBatchesFor(f.id)));
+      setSemesters(semesterList);
+      const defaultSemesterId = semesterList[0]?.id ?? "";
+      await Promise.all(feedList.map((f) => Promise.all([loadBatchesFor(f.id), loadDetectedFor(f.id, defaultSemesterId)])));
     } catch (e) {
       setError(String(e));
     } finally {
@@ -89,6 +126,36 @@ export function Imports() {
     }
   }
 
+  function updateDraft(key: string, patch: Partial<GroupDraft>) {
+    setDrafts((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+  }
+
+  async function createCourseFromGroup(feedId: string, group: DetectedCourseGroup) {
+    const key = groupKey(group);
+    const draft = drafts[key];
+    if (!draft?.name.trim() || !draft.semesterId) {
+      setError("Give the course a name and pick a semester first.");
+      return;
+    }
+    setCreatingGroup(key);
+    setError(null);
+    try {
+      await invoke("link_course", {
+        input: {
+          semester_id: draft.semesterId,
+          name: draft.name.trim(),
+          code: draft.code.trim() || null,
+          org_unit_id: group.org_unit_id,
+        },
+      });
+      await load();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setCreatingGroup(null);
+    }
+  }
+
   async function setExtractionCourse(feedId: string, extractionId: string, courseId: string) {
     setBatchesByFeed((prev) => ({
       ...prev,
@@ -128,8 +195,8 @@ export function Imports() {
   return (
     <div>
       <p className="hint">
-        Connect your D2L (or any ICS-based) calendar feed — due dates sync in automatically, but nothing reaches your tracker
-        without your review here first.
+        Connect your D2L (or any ICS-based) calendar feed — due dates and courses sync in automatically, but nothing reaches
+        your tracker without your review here first.
       </p>
       {error && <div className="error-banner">{error}</div>}
 
@@ -189,6 +256,48 @@ export function Imports() {
             </p>
             {feed.last_sync_error && <div className="error-banner">{feed.last_sync_error}</div>}
 
+            {(detectedByFeed[feed.id] ?? []).length > 0 && (
+              <>
+                <label className="field-label">Courses found in this feed</label>
+                {detectedByFeed[feed.id].map((group) => {
+                  const key = groupKey(group);
+                  const draft = drafts[key] ?? { name: group.suggested_name, code: group.suggested_code ?? "", semesterId: "" };
+                  return (
+                    <div key={key} className="extraction-card">
+                      <p className="hint" style={{ margin: "0 0 0.5rem" }}>
+                        {group.location} · {group.event_count} event{group.event_count === 1 ? "" : "s"}
+                      </p>
+                      <div className="field-grid">
+                        <div>
+                          <label className="field-label">Course name</label>
+                          <input value={draft.name} onChange={(e) => updateDraft(key, { name: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="field-label">Code</label>
+                          <input value={draft.code} onChange={(e) => updateDraft(key, { code: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="field-label">Semester</label>
+                          <select value={draft.semesterId} onChange={(e) => updateDraft(key, { semesterId: e.target.value })}>
+                            {semesters.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="row" style={{ justifyContent: "flex-end" }}>
+                        <button type="button" disabled={creatingGroup === key} onClick={() => createCourseFromGroup(feed.id, group)}>
+                          {creatingGroup === key ? "Creating…" : "Create course"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
             {(batchesByFeed[feed.id] ?? []).length === 0 ? (
               <p className="hint">Nothing waiting on review from this feed.</p>
             ) : (
@@ -238,12 +347,14 @@ export function Imports() {
         ))
       )}
 
-      {feeds.length > 0 && Object.values(batchesByFeed).every((b) => b.length === 0) && (
-        <div className="empty-state">
-          <IconInbox width={32} height={32} />
-          <p>All caught up — nothing pending review.</p>
-        </div>
-      )}
+      {feeds.length > 0 &&
+        Object.values(batchesByFeed).every((b) => b.length === 0) &&
+        Object.values(detectedByFeed).every((g) => g.length === 0) && (
+          <div className="empty-state">
+            <IconInbox width={32} height={32} />
+            <p>All caught up — nothing pending review.</p>
+          </div>
+        )}
     </div>
   );
 }

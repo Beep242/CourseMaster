@@ -1,7 +1,9 @@
-use academic_core::models::{CalendarFeed, NewCalendarFeed, Syllabus};
+use academic_core::models::{CalendarFeed, Course, NewCalendarFeed, Syllabus};
 use academic_core::repo::{calendar_feeds, syllabus};
 use axum::extract::{Path, State};
 use axum::Json;
+use document_engine::DetectedCourseGroup;
+use serde::{Deserialize, Serialize};
 
 use crate::auth::AuthUser;
 use crate::error::ApiError;
@@ -34,4 +36,42 @@ pub async fn list_feed_batches(
     Path(id): Path<String>,
 ) -> Result<Json<Vec<Syllabus>>, ApiError> {
     Ok(Json(syllabus::list_by_feed(&state.pool, &id).await?))
+}
+
+pub async fn detected_courses(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<DetectedCourseGroup>>, ApiError> {
+    Ok(Json(document_engine::detect_course_groups(&state.pool, &id).await?))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LinkCourseBody {
+    pub semester_id: String,
+    pub name: String,
+    pub code: Option<String>,
+    pub org_unit_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LinkCourseResponse {
+    pub course: Course,
+    pub backfilled_extractions: u64,
+}
+
+pub async fn link_course(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Json(body): Json<LinkCourseBody>,
+) -> Result<Json<LinkCourseResponse>, ApiError> {
+    let (course, backfilled_extractions) = document_engine::link_course_from_group(
+        &state.pool,
+        &body.semester_id,
+        body.org_unit_id.as_deref(),
+        &body.name,
+        body.code.as_deref(),
+    )
+    .await?;
+    Ok(Json(LinkCourseResponse { course, backfilled_extractions }))
 }

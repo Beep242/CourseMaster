@@ -140,6 +140,7 @@ mod tests {
                 professor_email: None,
                 credit_hours: Some(3.0),
                 color: None,
+                external_org_unit_id: None,
             },
         )
         .await

@@ -79,6 +79,7 @@ fn parse_extraction_response(value: &serde_json::Value) -> Vec<NewExtraction> {
                 confidence,
                 course_id: None,
                 external_uid: None,
+                external_org_unit_id: None,
             })
         })
         .collect()

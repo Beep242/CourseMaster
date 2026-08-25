@@ -37,6 +37,15 @@ export interface Course {
   current_grade: string | null;
   office_hours: string | null;
   late_policy: string | null;
+  external_org_unit_id: string | null;
+}
+
+export interface DetectedCourseGroup {
+  org_unit_id: string | null;
+  location: string;
+  suggested_code: string | null;
+  suggested_name: string;
+  event_count: number;
 }
 
 export interface Syllabus {

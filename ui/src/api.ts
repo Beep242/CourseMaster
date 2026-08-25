@@ -66,6 +66,10 @@ function resolveRequest(cmd: string, args: Record<string, unknown>): Req {
       return { method: "POST", path: `/calendar-feeds/${encodeURIComponent(String(args.feedId))}/sync` };
     case "list_feed_batches":
       return { method: "GET", path: `/calendar-feeds/${encodeURIComponent(String(args.feedId))}/syllabi` };
+    case "detected_courses":
+      return { method: "GET", path: `/calendar-feeds/${encodeURIComponent(String(args.feedId))}/detected-courses` };
+    case "link_course":
+      return { method: "POST", path: "/calendar-feeds/link-course", body: args.input };
     default:
       throw new Error(`Unknown command: ${cmd}`);
   }

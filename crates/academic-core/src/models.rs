@@ -89,6 +89,10 @@ pub struct Course {
     pub current_grade: Option<String>,
     pub office_hours: Option<String>,
     pub late_policy: Option<String>,
+    /// The LMS's own stable id for this course (e.g. a D2L org unit id),
+    /// present when this course was created by linking a calendar-feed's
+    /// auto-detected course group rather than typed in by hand.
+    pub external_org_unit_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,6 +104,8 @@ pub struct NewCourse {
     pub professor_email: Option<String>,
     pub credit_hours: Option<f64>,
     pub color: Option<String>,
+    #[serde(default)]
+    pub external_org_unit_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,6 +142,7 @@ pub struct SyllabusExtraction {
     pub review_status: ReviewStatus,
     pub resulting_assignment_id: Option<Id>,
     pub external_uid: Option<String>,
+    pub external_org_unit_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

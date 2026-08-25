@@ -9,7 +9,7 @@ use crate::models::{
 
 const SYLLABUS_COLUMNS: &str = "id, course_id, calendar_feed_id, source, raw_text, status, error_message, imported_at";
 const EXTRACTION_COLUMNS: &str = "id, syllabus_id, course_id, kind, title, description, due_date, due_time, \
-    source_excerpt, confidence, review_status, resulting_assignment_id, external_uid";
+    source_excerpt, confidence, review_status, resulting_assignment_id, external_uid, external_org_unit_id";
 
 fn row_to_syllabus(r: sqlx::sqlite::SqliteRow) -> Result<Syllabus, CoreError> {
     Ok(Syllabus {
@@ -39,6 +39,7 @@ fn row_to_extraction(r: sqlx::sqlite::SqliteRow) -> Result<SyllabusExtraction, C
         review_status: ReviewStatus::parse(&r.try_get::<String, _>("review_status")?),
         resulting_assignment_id: r.try_get("resulting_assignment_id")?,
         external_uid: r.try_get("external_uid")?,
+        external_org_unit_id: r.try_get("external_org_unit_id")?,
     })
 }
 
@@ -135,6 +136,7 @@ pub struct NewExtraction {
     pub confidence: f64,
     pub course_id: Option<String>,
     pub external_uid: Option<String>,
+    pub external_org_unit_id: Option<String>,
 }
 
 pub async fn insert_extractions(pool: &SqlitePool, syllabus_id: &str, items: Vec<NewExtraction>) -> Result<(), CoreError> {
@@ -142,7 +144,7 @@ pub async fn insert_extractions(pool: &SqlitePool, syllabus_id: &str, items: Vec
     for item in items {
         sqlx::query(
             "INSERT INTO syllabus_extractions (id, syllabus_id, course_id, kind, title, description, due_date, due_time, \
-             source_excerpt, confidence, external_uid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             source_excerpt, confidence, external_uid, external_org_unit_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(new_id())
         .bind(syllabus_id)
@@ -155,11 +157,30 @@ pub async fn insert_extractions(pool: &SqlitePool, syllabus_id: &str, items: Vec
         .bind(&item.source_excerpt)
         .bind(item.confidence)
         .bind(&item.external_uid)
+        .bind(&item.external_org_unit_id)
         .execute(&mut *tx)
         .await?;
     }
     tx.commit().await?;
     Ok(())
+}
+
+/// Called after a course is linked to an LMS org unit (see
+/// `document_engine::calendar_feed::link_course_from_group`) — resolves any
+/// extraction that was already sitting pending review with a matching
+/// org-unit id but no course guess, so the reviewer doesn't have to go
+/// back and manually assign a course to items that arrived before the
+/// course existed.
+pub async fn backfill_course_for_org_unit(pool: &SqlitePool, org_unit_id: &str, course_id: &str) -> Result<u64, CoreError> {
+    let result = sqlx::query(
+        "UPDATE syllabus_extractions SET course_id = ? \
+         WHERE external_org_unit_id = ? AND course_id IS NULL AND review_status = 'pending'",
+    )
+    .bind(course_id)
+    .bind(org_unit_id)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
 }
 
 pub async fn list_extractions(pool: &SqlitePool, syllabus_id: &str) -> Result<Vec<SyllabusExtraction>, CoreError> {
