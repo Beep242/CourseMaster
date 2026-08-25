@@ -37,16 +37,30 @@ mkdir -p /opt/coursemaster
 cd /opt/coursemaster
 git clone https://github.com/Beep242/CourseMaster.git .
 cp .env.example .env
-# edit .env: CROSS_APP_JWT_SECRET (copy verbatim from PortFolio's .env),
-# OWNER_EMAIL, GHCR_OWNER
+# edit .env: CROSS_APP_JWT_SECRET (copy verbatim from PortFolio's live .env
+# — NOT PortFolio's local dev .env, they differ), OWNER_EMAIL, GHCR_OWNER
 docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d
 docker compose -f docker-compose.prod.yml exec api claude setup-token
-# follow the printed URL, authorize with your Claude subscription — the
-# resulting credentials persist in the `claude-config` named volume across
-# restarts and image updates, so this is genuinely one-time (until you
-# rotate credentials yourself).
+# follow the printed URL, authorize with your Claude subscription, and watch
+# the terminal through to "Long-lived authentication token created
+# successfully!" — it prints the token directly rather than saving it
+# anywhere on disk (confirmed: `claude auth status` inside the container
+# still reports loggedIn: false after a completed run). Copy that token into
+# .env as CLAUDE_CODE_OAUTH_TOKEN, then:
+docker compose -f docker-compose.prod.yml up -d
+# picks up the token as an env var — this is the one that actually needs to
+# succeed; `claude auth status` in the container should now say loggedIn: true.
 ```
+
+**Firewall/proxy gotcha already hit once during this deploy:** the api
+container's port must NOT be bound loopback-only (`127.0.0.1:8080:8080`) —
+Caddy reaches it via `host.docker.internal`, which arrives from the docker
+bridge network, not `127.0.0.1`, so a loopback-only bind causes a silent 502
+with no obvious cause. The compose file here binds openly and relies on a
+`ufw` rule scoped to Caddy's bridge subnets instead (mirrors PortFolio's
+existing port-4000 rule) — if you ever regenerate this file, keep that
+pattern rather than reverting to loopback-only.
 
 ## 5. Caddy route
 

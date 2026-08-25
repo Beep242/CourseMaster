@@ -6,8 +6,8 @@
 #   docker compose -f docker-compose.prod.yml pull
 #   docker compose -f docker-compose.prod.yml up -d
 #   docker compose -f docker-compose.prod.yml exec api claude setup-token
-#     (one-time — follow the printed URL to authorize; the resulting
-#     credentials persist in the claude-config volume across restarts/updates)
+#     (prints a token, does NOT save it to disk — copy it into .env as
+#     CLAUDE_CODE_OAUTH_TOKEN, then `up -d` again to pick it up)
 #
 # Set GHCR_OWNER in .env to your GitHub username/org, lowercase.
 
@@ -25,15 +25,21 @@ services:
       OWNER_EMAIL: ${OWNER_EMAIL:?set OWNER_EMAIL in .env}
       WEB_ALLOWED_ORIGINS: ${WEB_ALLOWED_ORIGINS:-https://coursemaster.iambeep.com}
       CLAUDE_MODEL: ${CLAUDE_MODEL:-}
+      # `claude setup-token` prints this directly rather than writing to
+      # ~/.claude's credential store (confirmed empirically: the store stayed
+      # empty after a completed setup-token run) — it must be supplied as an
+      # env var on every container start instead of relying on a volume.
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:?set CLAUDE_CODE_OAUTH_TOKEN in .env — see DEPLOY.md}
     volumes:
       - coursemaster-data:/app/data
-      - claude-config:/root/.claude
-    # Loopback-only, same pattern as the other suite apps' Postgres binding —
-    # never reachable from the internet directly. The shared Caddy instance
-    # reaches it at 127.0.0.1:8080 — see DEPLOY.md for the exact site block.
+    # NOT loopback-only, unlike the other suite apps' Postgres binding — the
+    # shared Caddy container reaches this via `host.docker.internal`, which
+    # arrives from the docker bridge network, not 127.0.0.1 (a loopback-only
+    # bind caused a silent 502 here — Caddy could reach nothing). Actual
+    # internet exposure is blocked by a ufw rule scoped to Caddy's bridge
+    # subnets only, mirroring PortFolio's port-4000 rule — see DEPLOY.md.
     ports:
-      - "127.0.0.1:8080:8080"
+      - "8080:8080"
 
 volumes:
   coursemaster-data:
-  claude-config:
