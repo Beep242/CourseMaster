@@ -77,7 +77,21 @@ async fn main() {
         .route("/calendar-feeds/{id}/sync", post(handlers::calendar::sync_feed))
         .route("/calendar-feeds/{id}/syllabi", get(handlers::calendar::list_feed_batches))
         .route("/calendar-feeds/{id}/detected-courses", get(handlers::calendar::detected_courses))
-        .route("/calendar-feeds/link-course", post(handlers::calendar::link_course));
+        .route("/calendar-feeds/link-course", post(handlers::calendar::link_course))
+        .route(
+            "/courses/{id}/study-guides",
+            get(handlers::study::list_study_guides).post(handlers::study::generate_study_guide),
+        )
+        .route("/study-guides/{id}", get(handlers::study::get_study_guide))
+        .route(
+            "/courses/{id}/practice-tests",
+            get(handlers::study::list_practice_tests).post(handlers::study::generate_practice_test),
+        )
+        .route("/practice-tests/{id}", get(handlers::study::get_practice_test))
+        .route(
+            "/practice-tests/{id}/attempts",
+            get(handlers::study::list_attempts).post(handlers::study::submit_attempt),
+        );
 
     let allowed_origins: Vec<_> = env_or("WEB_ALLOWED_ORIGINS", "http://localhost:1430")
         .split(',')

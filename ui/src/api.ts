@@ -70,6 +70,22 @@ function resolveRequest(cmd: string, args: Record<string, unknown>): Req {
       return { method: "GET", path: `/calendar-feeds/${encodeURIComponent(String(args.feedId))}/detected-courses` };
     case "link_course":
       return { method: "POST", path: "/calendar-feeds/link-course", body: args.input };
+    case "generate_study_guide":
+      return { method: "POST", path: `/courses/${encodeURIComponent(String(args.courseId))}/study-guides`, body: args.input };
+    case "list_study_guides":
+      return { method: "GET", path: `/courses/${encodeURIComponent(String(args.courseId))}/study-guides` };
+    case "get_study_guide":
+      return { method: "GET", path: `/study-guides/${encodeURIComponent(String(args.id))}` };
+    case "generate_practice_test":
+      return { method: "POST", path: `/courses/${encodeURIComponent(String(args.courseId))}/practice-tests`, body: args.input };
+    case "list_practice_tests":
+      return { method: "GET", path: `/courses/${encodeURIComponent(String(args.courseId))}/practice-tests` };
+    case "get_practice_test":
+      return { method: "GET", path: `/practice-tests/${encodeURIComponent(String(args.id))}` };
+    case "submit_attempt":
+      return { method: "POST", path: `/practice-tests/${encodeURIComponent(String(args.id))}/attempts`, body: { answers: args.answers } };
+    case "list_attempts":
+      return { method: "GET", path: `/practice-tests/${encodeURIComponent(String(args.id))}/attempts` };
     default:
       throw new Error(`Unknown command: ${cmd}`);
   }

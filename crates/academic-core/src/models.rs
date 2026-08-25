@@ -47,6 +47,14 @@ string_enum!(AssignmentStatus {
 string_enum!(ReviewStatus { Pending => "pending", Approved => "approved", Rejected => "rejected", Edited => "edited" }, default = Pending);
 string_enum!(SyllabusStatus { Processing => "processing", ReadyForReview => "ready_for_review", Reviewed => "reviewed", Failed => "failed" }, default = Processing);
 string_enum!(SyllabusSource { Paste => "paste", CalendarFeed => "calendar_feed" }, default = Paste);
+string_enum!(StudyGuideKind {
+    QuickReview => "quick_review",
+    Complete => "complete",
+    CramSheet => "cram_sheet",
+    FormulaSheet => "formula_sheet",
+}, default = QuickReview);
+string_enum!(PracticeDifficulty { Easy => "easy", Medium => "medium", Hard => "hard", ExamSimulation => "exam_simulation" }, default = Medium);
+string_enum!(QuestionKind { MultipleChoice => "multiple_choice", TrueFalse => "true_false", ShortAnswer => "short_answer" }, default = MultipleChoice);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserProfile {
@@ -231,4 +239,52 @@ pub struct NewSubtask {
     pub title: String,
     pub estimated_minutes: Option<i64>,
     pub order_index: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StudyGuide {
+    pub id: Id,
+    pub course_id: Id,
+    pub kind: StudyGuideKind,
+    pub title: String,
+    pub content: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PracticeTest {
+    pub id: Id,
+    pub course_id: Id,
+    pub title: String,
+    pub difficulty: PracticeDifficulty,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PracticeQuestion {
+    pub id: Id,
+    pub practice_test_id: Id,
+    pub order_index: i64,
+    pub kind: QuestionKind,
+    pub topic: Option<String>,
+    pub question_text: String,
+    /// Only set for `multiple_choice`.
+    pub options: Option<Vec<String>>,
+    pub correct_answer: String,
+    pub explanation: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PracticeAttempt {
+    pub id: Id,
+    pub practice_test_id: Id,
+    pub score_percentage: f64,
+    pub answers: serde_json::Value,
+    pub completed_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubmittedAnswer {
+    pub question_id: Id,
+    pub response: String,
 }

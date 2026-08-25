@@ -549,6 +549,36 @@
   padding: 0.4em 0.8em;
 }
 
+/* ---- study guide markdown rendering ---- */
+
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
+  margin: 1.1em 0 0.4em;
+}
+.markdown-content h2:first-child,
+.markdown-content h3:first-child,
+.markdown-content h4:first-child {
+  margin-top: 0;
+}
+.markdown-content p {
+  margin: 0.5em 0;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+.markdown-content ul {
+  margin: 0.4em 0 0.8em;
+  padding-left: 1.3em;
+  color: var(--text-muted);
+}
+.markdown-content li {
+  margin: 0.3em 0;
+  line-height: 1.5;
+}
+.markdown-content strong {
+  color: var(--text-main);
+}
+
 /* ---- tabs ---- */
 
 .tabs {

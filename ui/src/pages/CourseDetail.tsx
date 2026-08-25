@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import invoke from "../api";
 import type { Assignment, AssignmentStatus, Course, Syllabus, SyllabusExtraction } from "../types";
 import { IconCheck, IconDoc, IconInbox, IconPlus, IconSparkle, IconX } from "../icons";
+import { Study } from "./Study";
 
 interface Props {
   courseId: string;
@@ -18,7 +19,7 @@ const STATUS_LABEL: Record<AssignmentStatus, string> = {
 
 export function CourseDetail({ courseId }: Props) {
   const [course, setCourse] = useState<Course | null>(null);
-  const [tab, setTab] = useState<"assignments" | "syllabus" | "ask">("assignments");
+  const [tab, setTab] = useState<"assignments" | "syllabus" | "ask" | "study">("assignments");
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
   const [extractions, setExtractions] = useState<Record<string, SyllabusExtraction[]>>({});
@@ -180,7 +181,12 @@ export function CourseDetail({ courseId }: Props) {
         <button type="button" className={`tab-item ${tab === "ask" ? "active" : ""}`} onClick={() => setTab("ask")}>
           Ask my syllabus
         </button>
+        <button type="button" className={`tab-item ${tab === "study" ? "active" : ""}`} onClick={() => setTab("study")}>
+          Study
+        </button>
       </div>
+
+      {tab === "study" && <Study courseId={courseId} />}
 
       {tab === "assignments" && (
         <div>

@@ -5,6 +5,9 @@ export type AssignmentStatus = "not_started" | "in_progress" | "waiting" | "comp
 export type ReviewStatus = "pending" | "approved" | "rejected" | "edited";
 export type SyllabusStatus = "processing" | "ready_for_review" | "reviewed" | "failed";
 export type SyllabusSource = "paste" | "calendar_feed";
+export type StudyGuideKind = "quick_review" | "complete" | "cram_sheet" | "formula_sheet";
+export type PracticeDifficulty = "easy" | "medium" | "hard" | "exam_simulation";
+export type QuestionKind = "multiple_choice" | "true_false" | "short_answer";
 
 export interface UserProfile {
   name: string;
@@ -117,4 +120,56 @@ export interface PrioritizedItem {
   days_until_due: number | null;
   is_overdue: boolean;
   reason: string;
+}
+
+export interface StudyGuide {
+  id: string;
+  course_id: string;
+  kind: StudyGuideKind;
+  title: string;
+  content: string;
+  created_at: string;
+}
+
+export interface PracticeQuestion {
+  id: string;
+  practice_test_id: string;
+  order_index: number;
+  kind: QuestionKind;
+  topic: string | null;
+  question_text: string;
+  options: string[] | null;
+  correct_answer: string;
+  explanation: string | null;
+}
+
+export interface PracticeTestSummary {
+  id: string;
+  course_id: string;
+  title: string;
+  difficulty: PracticeDifficulty;
+  created_at: string;
+}
+
+export interface PracticeTest extends PracticeTestSummary {
+  questions: PracticeQuestion[];
+}
+
+export interface GradedAnswer {
+  question_id: string;
+  question_text: string;
+  kind: QuestionKind;
+  topic: string | null;
+  submitted: string;
+  correct_answer: string;
+  is_correct: boolean;
+  feedback: string | null;
+}
+
+export interface PracticeAttempt {
+  id: string;
+  practice_test_id: string;
+  score_percentage: number;
+  answers: GradedAnswer[];
+  completed_at: string;
 }
