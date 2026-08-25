@@ -32,8 +32,13 @@ export async function exchangeBridgeSession(): Promise<BridgeSession> {
   return response.json();
 }
 
+/// `?next=` is PortFolio's own cross-app login handoff (already used by
+/// TruthSeeker/BPass — see PortFolio's `public/script.js` NEXT_ALLOWED_PREFIXES),
+/// an exact-prefix allow-list rather than an open redirect. Without it,
+/// logging in just leaves the user sitting on iambeep.com with no way back.
 export function portfolioLoginUrl(): string {
-  return `${PORTFOLIO_URL}/login.html`;
+  const next = encodeURIComponent(window.location.origin);
+  return `${PORTFOLIO_URL}/login.html?next=${next}`;
 }
 
 export function loadStoredSession(): BridgeSession | null {
