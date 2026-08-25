@@ -22,7 +22,13 @@ const STORAGE_KEY = "coursemaster-bridge-session";
 export class BridgeAuthError extends Error {}
 
 export async function exchangeBridgeSession(): Promise<BridgeSession> {
-  const response = await fetch(`${PORTFOLIO_URL}/auth/token?app=${APP_NAME}`, {
+  // Not /auth/token — that prefix is claimed entirely by Auth.js's own
+  // catch-all (`app.use("/auth/*", authHandler)` in PortFolio's server.js),
+  // mounted before this route and matching first. The bridge token route
+  // lives under /api/auth (`app.use("/api/auth", authRoutes)`) — confirmed
+  // against a live 400 with `[auth][error] UnknownAction: Cannot parse
+  // action at /auth/token` in PortFolio's own logs when this was wrong.
+  const response = await fetch(`${PORTFOLIO_URL}/api/auth/token?app=${APP_NAME}`, {
     method: "POST",
     credentials: "include",
   });
