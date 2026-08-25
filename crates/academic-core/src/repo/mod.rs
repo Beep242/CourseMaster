@@ -1,4 +1,5 @@
 pub mod assignments;
+pub mod calendar_feeds;
 pub mod courses;
 pub mod profile;
 pub mod semesters;

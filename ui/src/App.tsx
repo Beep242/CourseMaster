@@ -7,8 +7,9 @@ import { Onboarding } from "./pages/Onboarding";
 import { Dashboard } from "./pages/Dashboard";
 import { Courses } from "./pages/Courses";
 import { CourseDetail } from "./pages/CourseDetail";
+import { Imports } from "./pages/Imports";
 import { Settings } from "./pages/Settings";
-import { IconBook, IconGear, IconGrid, IconMoon, IconSun } from "./icons";
+import { IconBook, IconCalendar, IconGear, IconGrid, IconMoon, IconSun } from "./icons";
 
 type Theme = "dark" | "light";
 const THEME_KEY = "coursemaster-theme";
@@ -19,11 +20,12 @@ function resolveInitialTheme(): Theme {
   return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
 
-type View = { name: "dashboard" } | { name: "courses" } | { name: "course"; id: string } | { name: "settings" };
+type View = { name: "dashboard" } | { name: "courses" } | { name: "course"; id: string } | { name: "imports" } | { name: "settings" };
 
 const NAV = [
   { key: "dashboard" as const, label: "Dashboard", icon: IconGrid },
   { key: "courses" as const, label: "Courses", icon: IconBook },
+  { key: "imports" as const, label: "Imports", icon: IconCalendar },
   { key: "settings" as const, label: "Settings", icon: IconGear },
 ];
 
@@ -158,6 +160,7 @@ function App() {
           {view.name === "dashboard" && <Dashboard onOpenCourse={(id) => setView({ name: "course", id })} />}
           {view.name === "courses" && <Courses onOpenCourse={(id) => setView({ name: "course", id })} />}
           {view.name === "course" && <CourseDetail courseId={view.id} />}
+          {view.name === "imports" && <Imports />}
           {view.name === "settings" && <Settings />}
         </main>
       </div>

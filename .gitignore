@@ -9,3 +9,4 @@ desktop/src-tauri/target
 *.db-shm
 .env
 .DS_Store
+*.tsbuildinfo

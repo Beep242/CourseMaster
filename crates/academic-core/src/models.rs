@@ -46,6 +46,7 @@ string_enum!(AssignmentStatus {
 }, default = NotStarted);
 string_enum!(ReviewStatus { Pending => "pending", Approved => "approved", Rejected => "rejected", Edited => "edited" }, default = Pending);
 string_enum!(SyllabusStatus { Processing => "processing", ReadyForReview => "ready_for_review", Reviewed => "reviewed", Failed => "failed" }, default = Processing);
+string_enum!(SyllabusSource { Paste => "paste", CalendarFeed => "calendar_feed" }, default = Paste);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserProfile {
@@ -104,7 +105,12 @@ pub struct NewCourse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Syllabus {
     pub id: Id,
-    pub course_id: Id,
+    /// None for a calendar-feed-sourced batch, which spans every course in
+    /// one import — see `SyllabusExtraction::course_id` for where the
+    /// per-item course guess/override actually lives in that case.
+    pub course_id: Option<Id>,
+    pub calendar_feed_id: Option<Id>,
+    pub source: SyllabusSource,
     pub raw_text: String,
     pub status: SyllabusStatus,
     pub error_message: Option<String>,
@@ -115,6 +121,11 @@ pub struct Syllabus {
 pub struct SyllabusExtraction {
     pub id: Id,
     pub syllabus_id: Id,
+    /// None means "inherit the parent syllabus's course_id" (the paste
+    /// flow, where every extraction in the batch belongs to one course).
+    /// Set is either a calendar-feed course-name guess or a reviewer
+    /// override — resolved by `repo::syllabus::approve_extraction`.
+    pub course_id: Option<Id>,
     pub kind: AssignmentKind,
     pub title: String,
     pub description: Option<String>,
@@ -124,6 +135,7 @@ pub struct SyllabusExtraction {
     pub confidence: f64,
     pub review_status: ReviewStatus,
     pub resulting_assignment_id: Option<Id>,
+    pub external_uid: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,6 +145,22 @@ pub struct ExtractionEdits {
     pub due_date: Option<String>,
     pub due_time: Option<String>,
     pub kind: Option<AssignmentKind>,
+    pub course_id: Option<Id>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalendarFeed {
+    pub id: Id,
+    pub name: String,
+    pub ics_url: String,
+    pub last_synced_at: Option<String>,
+    pub last_sync_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewCalendarFeed {
+    pub name: String,
+    pub ics_url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

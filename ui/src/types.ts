@@ -4,6 +4,7 @@ export type AssignmentKind = "assignment" | "exam" | "quiz" | "project";
 export type AssignmentStatus = "not_started" | "in_progress" | "waiting" | "completed" | "submitted" | "overdue";
 export type ReviewStatus = "pending" | "approved" | "rejected" | "edited";
 export type SyllabusStatus = "processing" | "ready_for_review" | "reviewed" | "failed";
+export type SyllabusSource = "paste" | "calendar_feed";
 
 export interface UserProfile {
   name: string;
@@ -40,7 +41,9 @@ export interface Course {
 
 export interface Syllabus {
   id: string;
-  course_id: string;
+  course_id: string | null;
+  calendar_feed_id: string | null;
+  source: SyllabusSource;
   raw_text: string;
   status: SyllabusStatus;
   error_message: string | null;
@@ -50,6 +53,7 @@ export interface Syllabus {
 export interface SyllabusExtraction {
   id: string;
   syllabus_id: string;
+  course_id: string | null;
   kind: AssignmentKind;
   title: string;
   description: string | null;
@@ -59,6 +63,15 @@ export interface SyllabusExtraction {
   confidence: number;
   review_status: ReviewStatus;
   resulting_assignment_id: string | null;
+  external_uid: string | null;
+}
+
+export interface CalendarFeed {
+  id: string;
+  name: string;
+  ics_url: string;
+  last_synced_at: string | null;
+  last_sync_error: string | null;
 }
 
 export interface Assignment {

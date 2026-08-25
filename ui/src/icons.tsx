@@ -140,6 +140,28 @@ export function IconChevronRight(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconRefresh(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <path d="M20 11A8 8 0 0 0 6.3 6.3L4 8.6" />
+      <path d="M4 4v4.6h4.6" />
+      <path d="M4 13a8 8 0 0 0 13.7 4.7L20 15.4" />
+      <path d="M20 20v-4.6h-4.6" />
+    </svg>
+  );
+}
+
+export function IconCalendar(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <rect x="3" y="4.5" width="18" height="16" rx="2" />
+      <line x1="3" y1="9.5" x2="21" y2="9.5" />
+      <line x1="8" y1="2.5" x2="8" y2="6.5" />
+      <line x1="16" y1="2.5" x2="16" y2="6.5" />
+    </svg>
+  );
+}
+
 export function IconInbox(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base(props)}>

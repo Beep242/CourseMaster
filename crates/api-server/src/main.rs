@@ -72,7 +72,10 @@ async fn main() {
         .route("/syllabi/{id}/ask", post(handlers::syllabus::ask_syllabus))
         .route("/extractions/{id}/approve", post(handlers::syllabus::approve_extraction))
         .route("/extractions/{id}/reject", post(handlers::syllabus::reject_extraction))
-        .route("/prioritized", get(handlers::scheduler::prioritized_today));
+        .route("/prioritized", get(handlers::scheduler::prioritized_today))
+        .route("/calendar-feeds", get(handlers::calendar::list_feeds).post(handlers::calendar::create_feed))
+        .route("/calendar-feeds/{id}/sync", post(handlers::calendar::sync_feed))
+        .route("/calendar-feeds/{id}/syllabi", get(handlers::calendar::list_feed_batches));
 
     let allowed_origins: Vec<_> = env_or("WEB_ALLOWED_ORIGINS", "http://localhost:1430")
         .split(',')

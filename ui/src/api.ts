@@ -58,6 +58,14 @@ function resolveRequest(cmd: string, args: Record<string, unknown>): Req {
       return { method: "GET", path: "/prioritized" };
     case "ai_status":
       return { method: "GET", path: "/ai/status" };
+    case "create_calendar_feed":
+      return { method: "POST", path: "/calendar-feeds", body: args.input };
+    case "list_calendar_feeds":
+      return { method: "GET", path: "/calendar-feeds" };
+    case "sync_calendar_feed":
+      return { method: "POST", path: `/calendar-feeds/${encodeURIComponent(String(args.feedId))}/sync` };
+    case "list_feed_batches":
+      return { method: "GET", path: `/calendar-feeds/${encodeURIComponent(String(args.feedId))}/syllabi` };
     default:
       throw new Error(`Unknown command: ${cmd}`);
   }
