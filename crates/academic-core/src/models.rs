@@ -211,6 +211,7 @@ pub struct NewAssignment {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssignmentUpdate {
+    pub course_id: Option<Id>,
     pub title: Option<String>,
     pub description: Option<String>,
     pub due_date: Option<String>,

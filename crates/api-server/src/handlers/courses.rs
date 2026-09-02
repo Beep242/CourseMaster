@@ -20,6 +20,10 @@ pub async fn list_semesters(State(state): State<AppState>, _user: AuthUser) -> R
     Ok(Json(semesters::list(&state.pool).await?))
 }
 
+pub async fn delete_semester(State(state): State<AppState>, _user: AuthUser, Path(id): Path<String>) -> Result<(), ApiError> {
+    Ok(semesters::delete(&state.pool, &id).await?)
+}
+
 pub async fn create_course(
     State(state): State<AppState>,
     _user: AuthUser,
@@ -55,6 +59,10 @@ pub async fn get_course(
 #[derive(Debug, Deserialize)]
 pub struct GradeUpdate {
     pub grade: Option<String>,
+}
+
+pub async fn delete_course(State(state): State<AppState>, _user: AuthUser, Path(id): Path<String>) -> Result<(), ApiError> {
+    Ok(courses::delete(&state.pool, &id).await?)
 }
 
 pub async fn update_course_grade(

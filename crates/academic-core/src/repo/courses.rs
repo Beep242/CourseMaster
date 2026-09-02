@@ -78,6 +78,18 @@ pub async fn list_all(pool: &SqlitePool) -> Result<Vec<Course>, CoreError> {
     rows.into_iter().map(row_to_course).collect()
 }
 
+/// Cascades to the course's assignments, syllabi, study guides, and
+/// practice tests (all declared `ON DELETE CASCADE`) — deliberately
+/// destructive, the API layer requires explicit confirmation before this
+/// is ever reached.
+pub async fn delete(pool: &SqlitePool, id: &str) -> Result<(), CoreError> {
+    let result = sqlx::query("DELETE FROM courses WHERE id = ?").bind(id).execute(pool).await?;
+    if result.rows_affected() == 0 {
+        return Err(CoreError::NotFound(id.to_string()));
+    }
+    Ok(())
+}
+
 pub async fn update_grade(pool: &SqlitePool, id: &str, grade: Option<String>) -> Result<(), CoreError> {
     let result = sqlx::query("UPDATE courses SET current_grade = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
         .bind(grade)

@@ -78,6 +78,7 @@ pub async fn list_all(pool: &SqlitePool) -> Result<Vec<Assignment>, CoreError> {
 pub async fn update(pool: &SqlitePool, id: &str, patch: AssignmentUpdate) -> Result<Assignment, CoreError> {
     let existing = get(pool, id).await?.ok_or_else(|| CoreError::NotFound(id.to_string()))?;
 
+    let course_id = patch.course_id.unwrap_or(existing.course_id);
     let title = patch.title.unwrap_or(existing.title);
     let description = patch.description.or(existing.description);
     let due_date = patch.due_date.or(existing.due_date);
@@ -90,10 +91,11 @@ pub async fn update(pool: &SqlitePool, id: &str, patch: AssignmentUpdate) -> Res
     let notes = patch.notes.or(existing.notes);
 
     sqlx::query(
-        "UPDATE assignments SET title=?, description=?, due_date=?, due_time=?, difficulty=?, \
+        "UPDATE assignments SET course_id=?, title=?, description=?, due_date=?, due_time=?, difficulty=?, \
          estimated_duration_minutes=?, priority=?, status=?, completion_percentage=?, notes=?, \
          updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
     )
+    .bind(&course_id)
     .bind(&title)
     .bind(&description)
     .bind(&due_date)
@@ -175,6 +177,7 @@ mod tests {
             &pool,
             &a.id,
             AssignmentUpdate {
+                course_id: None,
                 title: None,
                 description: None,
                 due_date: None,

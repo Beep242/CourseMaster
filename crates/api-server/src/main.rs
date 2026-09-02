@@ -53,8 +53,12 @@ async fn main() {
         .route("/ai/status", get(handlers::ai::ai_status))
         .route("/profile", get(handlers::profile::get_profile).put(handlers::profile::save_profile))
         .route("/semesters", get(handlers::courses::list_semesters).post(handlers::courses::create_semester))
+        .route("/semesters/{id}", axum::routing::delete(handlers::courses::delete_semester))
         .route("/courses", get(handlers::courses::list_courses).post(handlers::courses::create_course))
-        .route("/courses/{id}", get(handlers::courses::get_course))
+        .route(
+            "/courses/{id}",
+            get(handlers::courses::get_course).delete(handlers::courses::delete_course),
+        )
         .route("/courses/{id}/grade", axum::routing::patch(handlers::courses::update_course_grade))
         .route("/courses/{id}/syllabi", get(handlers::syllabus::list_syllabi))
         .route(

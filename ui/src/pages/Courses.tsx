@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import invoke from "../api";
 import type { Course, Semester } from "../types";
-import { IconChevronRight, IconInbox, IconPlus } from "../icons";
+import { IconChevronRight, IconInbox, IconPlus, IconX } from "../icons";
 
 interface Props {
   onOpenCourse: (id: string) => void;
@@ -72,10 +72,46 @@ export function Courses({ onOpenCourse }: Props) {
     }
   }
 
+  async function removeCourse(id: string, name: string) {
+    if (!window.confirm(`Delete "${name}"? This also deletes its assignments, syllabi, and study materials — this can't be undone.`)) return;
+    setError(null);
+    try {
+      await invoke("delete_course", { id });
+      await load();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function removeSemester(id: string, name: string) {
+    if (!window.confirm(`Delete the semester "${name}"? This deletes every course in it, and everything attached to those courses — this can't be undone.`)) return;
+    setError(null);
+    try {
+      await invoke("delete_semester", { id });
+      await load();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
   return (
     <div>
       <p className="hint">Every course you're taking this semester, in one place.</p>
       {error && <div className="error-banner">{error}</div>}
+
+      {semesters.length > 0 && (
+        <div className="card">
+          <h3>Semesters</h3>
+          {semesters.map((s) => (
+            <div key={s.id} className="row" style={{ justifyContent: "space-between", margin: "0.4rem 0" }}>
+              <span>{s.name}</span>
+              <button type="button" className="btn-ghost" onClick={() => removeSemester(s.id, s.name)} title="Delete semester">
+                <IconX />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="row" style={{ justifyContent: "flex-end" }}>
         <button type="button" onClick={() => setShowForm((v) => !v)}>
@@ -159,7 +195,19 @@ export function Courses({ onOpenCourse }: Props) {
               <div className="course-card-title">
                 <span className="course-color-dot" style={{ background: course.color }} />
                 {course.name}
-                <span style={{ marginLeft: "auto" }}>
+                <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4 }}>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    style={{ padding: "0.2em" }}
+                    title="Delete course"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeCourse(course.id, course.name);
+                    }}
+                  >
+                    <IconX width={15} height={15} />
+                  </button>
                   <IconChevronRight />
                 </span>
               </div>

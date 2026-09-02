@@ -26,6 +26,10 @@ function resolveRequest(cmd: string, args: Record<string, unknown>): Req {
       return { method: "GET", path: `/courses/${encodeURIComponent(String(args.id))}` };
     case "update_course_grade":
       return { method: "PATCH", path: `/courses/${encodeURIComponent(String(args.id))}/grade`, body: { grade: args.grade } };
+    case "delete_course":
+      return { method: "DELETE", path: `/courses/${encodeURIComponent(String(args.id))}` };
+    case "delete_semester":
+      return { method: "DELETE", path: `/semesters/${encodeURIComponent(String(args.id))}` };
     case "create_assignment":
       return { method: "POST", path: "/assignments", body: args.input };
     case "list_assignments":

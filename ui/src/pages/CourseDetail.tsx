@@ -19,6 +19,7 @@ const STATUS_LABEL: Record<AssignmentStatus, string> = {
 
 export function CourseDetail({ courseId }: Props) {
   const [course, setCourse] = useState<Course | null>(null);
+  const [allCourses, setAllCourses] = useState<Course[]>([]);
   const [tab, setTab] = useState<"assignments" | "syllabus" | "ask" | "study">("assignments");
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
@@ -41,14 +42,16 @@ export function CourseDetail({ courseId }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const [c, a, s] = await Promise.all([
+      const [c, a, s, all] = await Promise.all([
         invoke<Course | null>("get_course", { id: courseId }),
         invoke<Assignment[]>("list_assignments", { courseId }),
         invoke<Syllabus[]>("list_syllabi", { courseId }),
+        invoke<Course[]>("list_courses", { semesterId: null }),
       ]);
       setCourse(c);
       setAssignments(a);
       setSyllabi(s);
+      setAllCourses(all);
       const extractionEntries = await Promise.all(
         s.map(async (syl) => [syl.id, await invoke<SyllabusExtraction[]>("list_extractions", { syllabusId: syl.id })] as const),
       );
@@ -110,6 +113,25 @@ export function CourseDetail({ courseId }: Props) {
   async function updateCompletion(id: string, completion_percentage: number) {
     try {
       await invoke("update_assignment", { id, patch: { completion_percentage } });
+      await load();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function moveAssignment(id: string, newCourseId: string) {
+    try {
+      await invoke("update_assignment", { id, patch: { course_id: newCourseId } });
+      await load();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function removeAssignment(id: string, title: string) {
+    if (!window.confirm(`Delete "${title}"? This can't be undone.`)) return;
+    try {
+      await invoke("delete_assignment", { id });
       await load();
     } catch (e) {
       setError(String(e));
@@ -260,6 +282,23 @@ export function CourseDetail({ courseId }: Props) {
                       onChange={(e) => updateCompletion(a.id, Number(e.target.value))}
                     />
                     <span style={{ fontSize: "0.78em", color: "var(--text-soft)", width: 32 }}>{a.completion_percentage}%</span>
+                  </div>
+                  <div className="row" style={{ justifyContent: "space-between", margin: "0.4rem 0 0" }}>
+                    <select
+                      value={a.course_id}
+                      title="Move to a different course"
+                      style={{ maxWidth: 220, fontSize: "0.82em" }}
+                      onChange={(e) => moveAssignment(a.id, e.target.value)}
+                    >
+                      {allCourses.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.id === courseId ? c.name : `Move to: ${c.name}`}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" className="btn-ghost" onClick={() => removeAssignment(a.id, a.title)}>
+                      <IconX /> Delete
+                    </button>
                   </div>
                 </div>
               ))}
