@@ -10,3 +10,4 @@ desktop/src-tauri/target
 .env
 .DS_Store
 *.tsbuildinfo
+/backups

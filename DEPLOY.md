@@ -90,6 +90,60 @@ then reload/restart that Caddy container.
   AI action (e.g. submitting a syllabus) fails with "Not logged in", re-run
   step 4's `claude setup-token`.
 
+## 7. Database snapshots, and the runbook for a schema change
+
+**There is exactly one copy of this data.** It lives in the `coursemaster-data`
+Docker volume on the VPS. There is no staging environment, and a push to `main`
+*is* a production deploy.
+
+**Rolling the image back does not roll a migration back.** `db::connect` runs
+`sqlx::migrate!` on every boot with `ignore_missing = false`, so once migration
+*N* has been applied, an older binary that does not contain *N* fails
+`validate_applied_migrations` with `VersionMissing` and panics during startup.
+That same binary serves `ui/dist`, so the entire site — not just the API — goes
+down, and it will not come back by redeploying the previous tag. Restoring the
+database is the only way out.
+
+```bash
+./scripts/backup-db.sh                  # snapshot, verify, pull a copy locally
+./scripts/restore-db.sh <snapshot.db>   # destructive; re-verifies first
+```
+
+`backup-db.sh` uses `sqlite3 .backup` rather than copying the file, because a
+plain copy races with in-flight writes and (once WAL is enabled) would miss the
+`-wal` sidecar. It installs `sqlite3` into the container on demand — the runtime
+image carries only Node and the Claude CLI, and an `apt-get install` there does
+not survive a container recreate. Snapshots land in `/opt/coursemaster/backups`
+on the VPS and `./backups` locally (both gitignored via `*.db`).
+
+`restore-db.sh` verifies the snapshot *before* touching anything, snapshots the
+database it is about to replace, then stops the container and swaps the file on
+the host — not via `docker exec`, because a stopped container cannot be exec'd
+and the stale `-wal`/`-shm` sidecars must be deleted while nothing is running.
+It resolves the volume's host path from `docker inspect`, so it works for both a
+named volume and a bind mount, and it aborts if the container does not stay up.
+
+### Before any deploy that adds a migration
+
+1. `./scripts/backup-db.sh` — confirm it prints `integrity_check: ok` and a row
+   summary that looks like your actual data.
+2. Confirm the local copy exists in `./backups`. A snapshot that only exists on
+   the same host you are about to change is not a backup.
+3. `cargo test --workspace` locally. **CI never runs it** —
+   `build-and-push.yml` runs `tsc -b` and nothing else, so an untested push is
+   genuinely untested.
+4. Push, then watch the Action through to the SSH deploy step.
+5. Hit `https://coursemaster.iambeep.com/` and sign in. A migration failure
+   shows up as the whole site being down, not as an API error.
+6. If it is down: `docker logs --tail 50 coursemaster-api-1`. A
+   `VersionMissing` or migration error means restore —
+   `./scripts/restore-db.sh <the snapshot from step 1>` — and redeploy the
+   previous image only *after* the database is back.
+
+Both scripts honour `CM_SSH_TARGET`, `CM_CONTAINER`, `CM_DB_PATH` and
+`CM_BACKUP_DIR`, which is also how the restore path gets exercised against a
+throwaway container instead of production.
+
 ## Local development against a local server
 
 ```bash
