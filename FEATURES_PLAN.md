@@ -523,6 +523,46 @@ survives next to any alphanumeric so `m/s2` stays one token.
 
 **109 tests pass workspace-wide.**
 
+### ✅ Increment 5 — Phone layout and broken form controls
+
+Before this, the app's only adaptation was an 860px breakpoint collapsing the
+sidebar to a 76px icon rail. On a 375px phone that rail permanently ate a fifth
+of the screen and left four unlabelled icons.
+
+- **Bottom tab bar below 560px.** The sidebar becomes a fixed bottom bar —
+  where a thumb reaches, and where the labels fit again (`.side-item span` is
+  un-hidden). `env(safe-area-inset-bottom)` clears the iPhone home bar, and
+  `.app-main` gets matching bottom padding so the last card is reachable.
+- **`.tabs` overflow.** It was `display:flex` with no `overflow-x` and no wrap,
+  so the primary navigation of the most-used screen ran off the edge with no
+  way to reach the tabs past it. Now scrolls horizontally inside its own box.
+- **Radio controls.** `input,textarea,select` sets `width:100%` + padding +
+  border; there was a `checkbox` override and **none for radio**, so every radio
+  rendered as a full-width padded box — broken on desktop too, and the MC and
+  true/false study modes would have inherited it.
+- **`.field-grid` row gap** was `0 1rem`, so stacked fields touched once the
+  grid wrapped to one column.
+- `100vh` → `100dvh` (vh is the *largest* viewport on iOS Safari, so the layout
+  clipped behind the URL bar), 44px touch targets under `(pointer: coarse)`,
+  a `.table-scroll` wrapper on the two real tables in `Study.tsx`, and a
+  `prefers-reduced-motion` guard.
+
+**Verified in a real browser at 375×812 and 1280×800**, against the actual
+stylesheets, since the signed-in shell needs a PortFolio session: no horizontal
+page scroll at either width, the bar pinned at `bottom === innerHeight`, tabs
+scrolling (`scrollWidth 409 > clientWidth 343`) while staying inside the
+viewport, zero controls under 44px, and the desktop sidebar unchanged at 232px
+with its brand, labels and AI chip.
+
+**That caught a bug I had just introduced:** the base `.sidebar` sets `top: 0`
+for its sticky desktop behaviour, and on a *fixed* element `top: 0` together
+with `bottom: 0` stretches it to the full viewport height — `height: auto`
+cannot override that. The bar covered the entire screen. Fixed by giving the top
+offset back explicitly. It also showed that a `border-radius: 50%` I had written
+for the radio was a no-op (Chrome ignores author border-radius on a
+default-appearance radio), so that was removed rather than left looking
+load-bearing.
+
 ### Remaining
 
 Status line per increment as each lands, plus anything deferred.

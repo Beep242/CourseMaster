@@ -115,6 +115,7 @@ body {
   background-color: var(--bg-app);
   color: var(--text-main);
   min-height: 100vh;
+  min-height: 100dvh;
   min-width: 320px;
   position: relative;
   overflow-x: hidden;
@@ -289,12 +290,37 @@ select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
-input[type="checkbox"] {
+/* The `input, textarea, select` rule above sets width:100% plus padding and a
+   border, which is right for a text field and nonsense for a toggle. There was
+   an override for checkbox but none for radio, so every radio in the app
+   rendered as a full-width padded box — broken on desktop, not just on a
+   phone, and the multiple-choice and true/false study modes would have
+   inherited it. */
+input[type="checkbox"],
+input[type="radio"] {
   width: 16px;
   height: 16px;
+  flex-shrink: 0;
   padding: 0;
   accent-color: var(--accent);
   cursor: pointer;
+}
+/* No `border-radius` override here: the native radio already renders round,
+   and Chrome ignores author border-radius on a default-appearance radio
+   (computed style reports 0px), so setting it would be a no-op that looks
+   load-bearing. */
+
+/* Honour the OS "reduce motion" setting. The app animates button lifts, card
+   flips and the 0.55s transform below, none of which is load-bearing. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 table {

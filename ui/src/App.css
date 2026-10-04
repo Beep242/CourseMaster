@@ -3,6 +3,10 @@
 .shell {
   display: flex;
   min-height: 100vh;
+  /* dvh tracks the viewport as mobile browser chrome shows and hides; 100vh is
+     the *largest* viewport on iOS Safari, so it clipped the bottom of the
+     layout behind the URL bar. The vh line stays as a fallback. */
+  min-height: 100dvh;
 }
 
 .sidebar {
@@ -16,6 +20,7 @@
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100dvh;
 }
 
 .brand {
@@ -244,7 +249,9 @@
 .field-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0 1rem;
+  /* Row gap was 0, so once the grid wrapped to one column on a phone the
+     stacked fields sat directly against each other. */
+  gap: 0.75rem 1rem;
 }
 
 /* ---- cards ---- */
@@ -586,8 +593,24 @@
   gap: 4px;
   border-bottom: 1px solid var(--border-softer);
   margin-bottom: 1rem;
+  /* Without these the tab strip -- the primary navigation of the most-used
+     screen -- overflowed its container on a phone with no way to reach the
+     tabs past the edge. */
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.tabs::-webkit-scrollbar {
+  height: 3px;
+}
+.tabs::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: var(--radius-pill);
 }
 .tab-item {
+  white-space: nowrap;
+  flex-shrink: 0;
   background: transparent;
   box-shadow: none;
   color: var(--text-muted);
@@ -611,6 +634,7 @@
 
 .onboarding-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -688,10 +712,117 @@
   }
 }
 
+/* ---- phone layout ----
+
+   Above this width the sidebar collapses to a 76px icon rail (see the 860px
+   block), which was the *only* adaptation the app had: on a phone that rail
+   permanently ate a fifth of a 375px screen and left unlabelled icons. Below
+   560px the sidebar becomes a bottom tab bar instead, which is both where a
+   thumb reaches and where the labels fit again. */
 @media (max-width: 560px) {
-  .topbar {
+  .shell {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
   }
+
+  .sidebar {
+    position: fixed;
+    /* The base rule sets `top: 0` for its sticky desktop behaviour. On a fixed
+       element, `top: 0` together with `bottom: 0` stretches it to the full
+       viewport height and `height: auto` cannot override that — so the bar has
+       to give the top offset back explicitly. */
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    border-right: none;
+    border-top: 1px solid var(--border-subtle);
+    padding: 6px 8px;
+    /* Clears the iPhone home-bar area; resolves to 0 everywhere else. */
+    padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .brand {
+    display: none;
+  }
+
+  .side-nav {
+    flex-direction: row;
+    justify-content: space-around;
+    gap: 4px;
+    margin-top: 0;
+  }
+
+  .side-item {
+    flex-direction: column;
+    gap: 3px;
+    padding: 0.45em 0.3em;
+    font-size: 0.68em;
+    letter-spacing: 0.01em;
+  }
+
+  /* The 860px rail hides these; a tab bar has room for them and an unlabelled
+     icon row is a guessing game. */
+  .side-item span {
+    display: block;
+  }
+
+  .side-item.active {
+    /* The full gradient pill is too heavy at tab-bar size. */
+    background: var(--bg-elevated);
+    color: var(--accent-strong);
+    box-shadow: none;
+  }
+  .side-item.active:hover:not(:disabled) {
+    background: var(--bg-elevated);
+    color: var(--accent-strong);
+    box-shadow: none;
+  }
+
+  .topbar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 14px 16px 4px;
+  }
+
+  .app-main {
+    padding: 12px 16px;
+    /* Content must clear the fixed tab bar, or the last card is unreachable. */
+    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Touch targets. 44px is the smallest reliably tappable control; keyed off a
+   coarse pointer rather than width so it also covers a tablet or a
+   touchscreen laptop, and so a narrow desktop window does not get chunky
+   controls it has no use for. */
+@media (pointer: coarse) {
+  button,
+  select,
+  input:not([type="checkbox"]):not([type="radio"]),
+  .tab-item,
+  .side-item {
+    min-height: 44px;
+  }
+  .course-card,
+  .priority-item {
+    min-height: 56px;
+  }
+}
+
+/* Wide content -- a results table, a long code span -- scrolls inside its own
+   box. Without this the whole page scrolls sideways and the layout shifts. */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }

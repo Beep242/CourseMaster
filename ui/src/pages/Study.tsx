@@ -328,6 +328,7 @@ export function Study({ courseId }: Props) {
         {guides.length === 0 ? (
           <p className="hint">No study guides yet.</p>
         ) : (
+          <div className="table-scroll">
           <table>
             <tbody>
               {guides.map((g) => (
@@ -338,6 +339,7 @@ export function Study({ courseId }: Props) {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
@@ -367,6 +369,7 @@ export function Study({ courseId }: Props) {
         {tests.length === 0 ? (
           <p className="hint">No practice tests yet.</p>
         ) : (
+          <div className="table-scroll">
           <table>
             <tbody>
               {tests.map((t) => (
@@ -377,6 +380,7 @@ export function Study({ courseId }: Props) {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>
