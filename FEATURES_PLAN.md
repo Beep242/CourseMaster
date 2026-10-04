@@ -1,0 +1,434 @@
+# FEATURES_PLAN.md — Gizmo parity for CourseMaster
+
+Status: **plan only, awaiting approval. No feature code written.**
+
+Target: match Gizmo (AI flashcard/quiz study app) *adapted to* CourseMaster's architecture — not bolted
+onto it. 98 individual capabilities were mapped across Gizmo's 10 feature areas: **2 already present,
+9 partial, 87 missing.**
+
+---
+
+## 1. Scope decision
+
+This app is for **one student's personal learning**. Per that decision, the following are **out of
+scope entirely** — not deferred, not phase 2:
+
+- Leaderboards of every kind (friends, global, class) — Gizmo area 5
+- All of Gizmo area 6's social layer: friends list, challenge a friend, live Kahoot-style
+  multiplayer rooms joined by code
+
+Consequently this plan contains **no** users table, **no** `user_id` migration, **no** replacement of
+the `OWNER_EMAIL` gate, and **no** WebSocket/SSE layer. The single-owner architecture is treated as a
+fixed constraint rather than a problem to solve. That removes 8 of the 98 capabilities outright and
+downgrades another 4 ("multi-user foundation steps 1–4") to never.
+
+**Kept** from area 5: XP, levels, daily streaks with freeze, hearts, achievements — all derived from
+the student's own review history. **Reshaped** from area 6: "beat your own best on a deck" replaces
+"challenge a friend"; a public read-only share-by-link survives as optional.
+
+---
+
+## 2. What CourseMaster already has
+
+| Subsystem | Reality |
+|---|---|
+| `crates/academic-core` | sqlx/SQLite pool, models, one `repo/*` module per table, 4 append-only migrations. `user_profile` is `CHECK (id = 1)` — single row, single user. No `users` table, no `user_id` on any row. |
+| `crates/scheduler` | Pure assignment prioritization scoring. No `academic-core` dependency, unit-tested in isolation. **This is the precedent to copy** for any new pure-logic crate. |
+| `crates/document-engine` | Syllabus extraction, D2L ICS calendar import, study-guide and practice-test generation. Deps: `reqwest`, `ical`, `chrono`, `chrono-tz`. |
+| `crates/ai-engine` | `AiProvider` trait + `ClaudeCliProvider`. The only AI seam. |
+| `crates/api-server` | Axum 0.8, 39 handlers, also serves `ui/dist` as static files. |
+| `desktop/src-tauri` | Thin shell, no custom commands, no local DB, no local AI. |
+| Frontend | React 18 + Vite + TS. Runtime dependencies are **exactly `react` and `react-dom`**. No component library, no router (a `View` union + `setView`), no state manager, no icon package, no test runner, no eslint. |
+| Study tools today | `study_guides` (one Markdown blob), `practice_tests` → `practice_questions` → `practice_attempts` (one `answers_json` blob per attempt). |
+
+**What that means for Gizmo parity.** There are **no flashcards, no decks, no per-card state and no
+spaced repetition of any kind**. `practice_questions` is not a usable card table: it is owned by one
+`practice_tests` row via cascade so a card cannot be moved or shared, and it has no `created_at`,
+`updated_at`, tags, media or provenance columns. `practice_attempts` stores one JSON blob with no
+`question_id` column anywhere, so it cannot express per-card history. Decks and cards need new tables;
+`practice_tests` stays the graded-mock-exam feature it already is.
+
+**The AI seam is the binding constraint.** All AI runs by spawning `claude -p --tools ""` — so the
+model cannot fetch a URL, read a file, or accept an image, and there is no vision path at all. Every
+ingestion source must be extracted to text **in Rust** first, then handed to Claude. Two methods
+exist: `complete()` → freeform text, `extract_structured()` → JSON against a caller-supplied schema.
+
+---
+
+## 3. Pre-existing defects that gate this work
+
+Each of these was verified by reading the source in this repo, not assumed. All four get worse as
+features pile on, so they are fixed first.
+
+| # | Defect | Evidence |
+|---|---|---|
+| 1 | **UTF-8 panic kills the whole site.** `truncate` slices `&s[..max]` on a byte boundary. It is reached only on the malformed-JSON error path — exactly where non-ASCII math is most likely. `panic = "abort"` is set, `tower-http` is limited to `cors/fs/trace` so no `CatchPanicLayer` is possible, and the same binary serves the frontend. | `crates/ai-engine/src/claude_cli.rs:197` |
+| 2 | **A large prompt can hang the server forever.** `stdin.write_all(...).await?` sits *outside* the `timeout(...)` that wraps `child.wait_with_output()`, and stdout is not drained while stdin is written. A prompt past the pipe buffer blocks with no timeout — directly on the path every document import takes. | `claude_cli.rs:160` vs `:163` |
+| 3 | **A bridge token omitting `iss`/`aud` is accepted.** `auth.rs` calls `set_issuer`/`set_audience`, but `BridgeClaims` declares neither field, and jsonwebtoken 9.3.1 only enforces `required_spec_claims` (default: `exp` alone). The suite secret is shared with PortFolio, StockMan, TruthSeeker and BPass, so a token minted for another app that omits `aud` passes here. One-line fix. | `crates/api-server/src/auth.rs:17-23,57-61` |
+| 4 | **Radio buttons are broken, on desktop too.** `input, textarea, select` sets `width:100%` plus padding and a border. There is an override for `input[type="checkbox"]` and **none** for `radio`, so the radios already shipped in the practice-test UI render as full-width padded boxes. Every multiple-choice and true/false mode would clone this. | `ui/src/index.css:268-298` vs `ui/src/pages/Study.tsx:264,278` |
+
+Also verified: **no `DefaultBodyLimit` anywhere**, so axum's 2 MiB default already silently caps
+*pasted* text; and production runs `journal_mode=delete` with a 5-connection pool, meaning a writer
+blocks readers.
+
+**And there is no backup of any kind in this repo and no working rollback.** Once a migration applies,
+the older image boot-panics: sqlx's `validate_applied_migrations` returns `VersionMissing` for any
+applied version the older binary lacks, `ignore_missing=false`, no override in `db.rs`. Since that
+binary also serves the frontend, a bad migration takes the entire site down, and a push to `main` *is*
+a production deploy with no health check. That is why increment 1 is a backup script, not a feature.
+
+---
+
+## 4. Gap analysis
+
+`[status / effort / value]` — value judged for one student with 7 real courses.
+
+### Area 1 — AI content import (20 capabilities)
+```
+[missing/M/critical] AI card generation from pasted notes — the core generator everything else feeds
+[missing/L/critical] review / edit / delete generated cards before saving — the human-approval gate
+[missing/M/critical] the review screen itself
+[missing/M/critical] file upload transport — without it no PDF/PPTX/DOCX/image/apkg import can exist
+[missing/M/critical] input size guard + chunking, and fixing the stdin deadlock (defect 2)
+[missing/M/critical] generate cards from a PDF with a real text layer
+[missing/M/high]     generate cards from DOCX
+[missing/M/high]     generate cards from PPTX
+[missing/S/high]     import a Quizlet deck by paste/export
+[missing/S/high]     idempotent re-import (re-pasting a corrected set must not double the deck)
+[missing/M/high]     move generation off the request thread
+[missing/S/medium]   import an Anki CSV/TXT export
+[missing/M/medium]   generate cards from a web page URL
+[missing/S/medium]   record what each generation cost
+[missing/L/low]      OCR from an image or screenshot
+[missing/XL/low]     scanned / image-only PDF
+[missing/L/low]      YouTube / video transcript
+[missing/XL/low]     uploaded video or audio
+[missing/L/low]      Anki .apkg archive
+[missing/L/low]      Anki media images
+```
+
+### Area 2 — Spaced repetition (6)
+```
+[missing/S/critical] SM-2 itself: pure fn review(state, rating, today) -> state, no DB/HTTP/AI
+[missing/M/critical] per-card schedule state + a normalized per-review log, written atomically
+[missing/S/critical] submit one review, returning the new schedule
+[missing/M/critical] "Due today" queue spanning ALL courses and decks, plus a top-level Review page
+[missing/S/high]     queue shaping for 7 courses: new/day cap, total/day cap, course interleaving
+[missing/S/low]      suspend/bury, and leech flagging after N lapses
+```
+
+### Area 3 — Study modes (11)
+```
+[partial/S/high]     fix the broken radio/toggle styling every MC and T/F mode would inherit (defect 4)
+[missing/M/critical] classic flip session: one card, flip to reveal, grade buttons, keyboard + swipe
+[missing/M/critical] deterministic fuzzy matcher: Correct/Incorrect/Undecided with NO AI call
+[partial/S/high]     refactor the existing practice-test grader onto that crate — one implementation
+[missing/M/high]     typed-answer mode, with self-grade fallback for Undecided
+[partial/M/high]     multiple-choice mode, distractors PRE-GENERATED at save time, never live
+[partial/S/medium]   optional AI adjudication for Undecided only, with per-session/per-day caps
+[missing/S/medium]   true/false mode
+[missing/S/medium]   mixed mode interleaving per card based on what each card supports
+[missing/M/medium]   LaTeX math rendering
+[missing/L/low]      images on cards
+```
+
+### Area 4 — AI tutor (5)
+```
+[missing/S/critical] card provenance: verbatim source excerpt + explanation + accepted answers
+[missing/M/critical] AI seam guardrails: per-call timeout/budget, max_input_chars, persisted cost
+[partial/M/high]     "Explain" on a wrong answer, grounded in that card's own excerpt, cached
+[missing/M/high]     deterministic grounding selection (no vector store, no embedding model)
+[partial/L/medium]   multi-turn chat with a deck/course
+```
+
+### Area 5 — Gamification (15, of which 6 are out of scope)
+```
+[missing/S/critical] day-boundary contract: client-supplied local_date + a timezone on user_profile
+[missing/S/critical] daily streak, derived from distinct local dates in the review log
+[missing/S/high]     XP per review, derived from the log — never stored as a counter
+[missing/M/high]     streak freeze: offered on read, spent on confirm, no cron
+[missing/S/high]     personal history — the single-user replacement for a leaderboard
+[missing/M/high]     gamification chips on the existing Dashboard
+[missing/S/medium]   levels with progress to next
+[missing/M/medium]   achievements, evaluated from the log on read
+[missing/S/low]      hearts per session (opt-in, non-blocking)
+OUT OF SCOPE: friends leaderboard, global/class leaderboard, multi-user foundation steps 1-4
+```
+
+### Area 6 — Social (8, of which 5 are out of scope)
+```
+[have/S/low]         PortFolio already issues bridge tokens for non-owner accounts
+[missing/S/medium]   beat your own best on a deck — the single-user "challenge a friend"
+[missing/M/medium]   share a deck by link: public, read-only, no accounts
+[missing/M/low]      guest scores on a shared deck via typed nicknames
+OUT OF SCOPE: friends list, challenge a friend, realtime transport, live quiz rooms
+```
+
+### Area 7 — Organization (7)
+```
+[missing/M/critical] decks: named, mutable, course-scoped container (course_id nullable)
+[missing/M/critical] cards: front/back, distractors, explanation, full CRUD so generated cards are editable
+[missing/M/critical] deck + card browsing UI
+[missing/S/high]     tags on cards, and filtering by tag
+[missing/S/high]     search across all cards in all decks and courses
+[partial/S/medium]   move a deck between courses, rename/recolour, edit the parent course
+[missing/L/low]      nested folders
+```
+
+### Area 8 — Progress & analytics (10)
+```
+[missing/M/critical] per-review event log — one row per graded answer, not one blob per attempt
+[missing/S/critical] atomic review write so schedule and log can never disagree
+[missing/S/critical] weak-card list, ranked, per course or across all
+[missing/S/high]     accuracy history — per-day correct/total time series
+[missing/M/high]     mastery % per deck, defined forward-looking rather than as lifetime accuracy
+[missing/L/high]     "exam ready" score: explicit weighted formula + human-readable reason string
+[missing/M/high]     analytics page composing all of the above
+[missing/S/medium]   study time, client-reported and server-clamped
+[partial/S/medium]   one-time backfill of practice_attempts into the review log
+[missing/S/low]      per-topic mastery as distinct from per-deck
+```
+
+### Area 9 — Reminders (6)
+```
+[partial/S/high]     exam-date countdowns, computed on read — no scheduler, no state
+[missing/M/high]     exam cram bias: approaching exam surfaces that course sooner, without mutating due dates
+[missing/S/high]     daily study reminder, in-app, computed on open
+[missing/M/low]      in-process tokio interval task
+[missing/L/low]      email reminders
+[missing/XL/low]     web push
+```
+
+### Area 10 — Cross-device (10)
+```
+[have/S/high]        progress already syncs — the hosted API is the single source of truth
+[missing/M/critical] phone layout: bottom tab bar below 560px (today the 76px sidebar rail is permanent)
+[missing/S/critical] fix .tabs overflow — the main nav of the most-used screen, no overflow-x, no wrap
+[missing/S/high]     fix radio controls (defect 4)
+[missing/S/high]     44px minimum touch targets
+[missing/S/medium]   100vh -> 100dvh so mobile browser chrome stops clipping
+[missing/S/medium]   fix table overflow on the Study screen
+[missing/S/medium]   installable to the home screen (manifest + icons)
+[missing/S/low]      .field-grid row gap — today `gap: 0 1rem`, so stacked fields touch on a phone
+[missing/S/low]      prefers-reduced-motion guard
+```
+
+Verified: the only layout media queries are `860px` (sidebar → 76px rail) and `560px` (topbar stacks
+only). There is no phone layout.
+
+---
+
+## 5. Implementation order
+
+24 increments. Every one leaves the app building, tested and deployable — a push to `main` is a
+production deploy, so a half-finished increment on `main` is a broken production site.
+
+**Sequencing principle:** pure logic crates come *before* the migrations that store their output, so
+column shapes are transcribed from working code rather than guessed. SQLite cannot retype a column,
+and the only workaround is the table-rebuild pattern, which under `foreign_keys(true)` performs an
+implicit DELETE that fires child cascades.
+
+| # | Increment | Effort | Deps |
+|---|---|---|---|
+| 1 | Production safety net: DB snapshot/restore scripts, deploy runbook, JWT claim hardening (defect 3) | S | — |
+| 2 | AI seam hardening: stdin deadlock (defect 2), UTF-8 panic (defect 1), size/timeout/budget knobs, cost plumbing | M | — |
+| 3 | `crates/srs` — SM-2 as a pure, exactly-asserted function | M | — |
+| 4 | `crates/grading` — deterministic answer matching; refactor the existing grader onto it | M | — |
+| 5 | Mobile layout + broken form controls (defect 4) | S | — |
+| 6 | Migration 0005: decks + cards + deck_sources, WAL, repo layer, HTTP API | M | 1,3,4 |
+| 7 | Deck/card UI: browse, create, edit, search | M | 5,6 |
+| **8** | **MILESTONE — flip-card study session.** You can actually study. | M | 7 |
+| 9 | Migration 0006: import staging (`card_imports` + `card_candidates`) | S | 1,6 |
+| **10** | **MILESTONE — AI card generation from pasted notes + review/approve screen.** | L | 2,8,9 |
+| 11 | Migration 0007: `card_schedule` + `card_reviews`, atomic review write | M | 1,3,6 |
+| 12 | Review API: submit a review, due-today queue across all 7 courses, session caps | M | 11 |
+| 13 | Grade buttons in the session, suspend + leech flagging | M | 8,12 |
+| 14 | Quizlet paste and Anki CSV import, idempotent re-import | S | 9,10 |
+| 15 | **Ingestion spike:** PDF/DOCX/PPTX text extraction, wired to nothing | L | — |
+| 16 | File upload transport; wire the document extractors | M | 2,10,15 |
+| 17 | Typed-answer study mode | S | 4,13 |
+| 18 | Multiple-choice, true/false and mixed modes | M | 10,17 |
+| 19 | "Explain" on a wrong answer, cached per normalised mistake | M | 1,2,4,13 |
+| 20 | Gamification: XP, levels, streaks with freeze, achievements, opt-in hearts | L | 1,11 |
+| 21 | Analytics endpoints: weak cards, accuracy history, time on cards | M | 11 |
+| 22 | `crates/examready`: mastery + explainable exam-ready score, Progress page | M | 11,21 |
+| 23 | Exam countdowns, cram bias, in-app daily nudge | S | 12,21 |
+| 24 | Installable web app (PWA manifest + icons) | S | 5 |
+
+**Why 8 lands before spaced repetition:** "paste my notes and study tonight" needs cards and a
+flip-through, not scheduling. Putting the flip session behind SRS, five study modes and every document
+importer would mean ~19 increments of unvalidated work before you ever touch a card.
+
+**Why 15 is wired to nothing:** it writes the PDF/DOCX/PPTX extractors as pure functions with fixtures
+and a dump test over your own lecture handouts, with no endpoint, no table and no UI. If `pdf-extract`
+interleaves a two-column handout into text that would yield plausible-looking *wrong* flashcards, that
+costs one module to find out — instead of being discovered after upload transport, staging tables and a
+review screen were all built assuming it works.
+
+Tests land in the same increment as the code they test: SM-2 in 3, the grading ladder in 4, the import
+parsers in 14/15. All of them live in `serde`/`chrono`-only crates, because `build-and-push.yml` never
+runs `cargo test` — `tsc -b` is the only automated gate in the pipeline, so **run `cargo test
+--workspace` by hand before every push**, and logic written in TypeScript is logic this project cannot
+test at all.
+
+---
+
+## 6. Decisions taken as defaults
+
+Taken rather than asked, to avoid padding the question list. Each is reversible cheaply except where noted.
+
+- **SM-2, not FSRS.** FSRS's advantage comes from optimising 17–21 weights against your own review
+  history; on day one there is none, so it would run on defaults where it is not measurably better for
+  one user — and the optimiser means pulling an ML stack into a workspace that recompiles under
+  `lto=true, codegen-units=1` on every commit. SM-2 is a pure total function whose transitions are
+  exact-equality assertions, matching `crates/scheduler`'s existing test style.
+- **Courses → decks → cards**, `decks.course_id` nullable (so a flat course→cards model is the
+  degenerate case). Nested folders deferred.
+- **`cards.source_excerpt` nullable** — a hand-written card has no source, and SQLite cannot relax a
+  `NOT NULL` later.
+- **Upload is base64-in-JSON at a 25 MiB `DefaultBodyLimit`.** Multipart needs an axum feature plus
+  `multer` *and* a second fetch path, because `ui/src/api.ts` hardcodes `application/json` +
+  `JSON.stringify`. The body-limit layer is mandatory either way.
+- **Five per-feature migrations (0005–0009), not one combined file** — each additive-only and
+  independently verifiable, matching the one-feature-per-commit requirement.
+- **Write-per-answer with `journal_mode=WAL`** (production is currently rollback-journal, where a
+  writer blocks readers). Batching at session end loses everything on a tab close.
+- **LaTeX stage 1 only:** store verbatim, prompt the generator to prefer Unicode math. Images
+  descoped with a nullable `image_data_uri` column reserved, so enabling either later needs no
+  migration against `cards`.
+- **Hearts opt-in and non-blocking.** Being locked out of your own cards the night before an exam
+  makes the app worse at its only job.
+- **A configurable daily AI spend ceiling, warn-and-continue.**
+
+---
+
+## 7. Deferred, with reasons
+
+**Needs a native system library or model weights** — each would mean editing the Docker runtime stage:
+- *OCR of images/screenshots* — tesseract (~+100 MB on an image the VPS re-pulls every deploy), or
+  `ocrs`+rten (pure Rust but ~15 MB of weights and worse on dense text), or tesseract.js (~2 MB wasm,
+  breaking the two-npm-dependency invariant). macOS and Windows both do system-wide live text
+  recognition, so "select the text and paste it" is nearly free.
+- *Scanned/image-only PDFs* — needs pdfium or mupdf **plus** the OCR path. Two native deps stacked.
+- *Uploaded video/audio transcription* — ffmpeg plus either whisper weights on a shared VPS or a paid
+  STT API, which contradicts the no-API-key premise the whole AI seam is built on.
+- *YouTube transcripts* — no keyless official captions API; the watch-page scrape breaks whenever
+  YouTube changes shape, and YouTube bot-checks datacenter IPs, which is exactly what this VPS is. It
+  would work on your laptop and fail from the server.
+
+**Deferred for a guard, not for crates:**
+- *Web-page import by URL* — `reqwest` is already a dependency and already fetches a user-supplied URL.
+  But this container can reach `host.docker.internal:8080` and the shared Caddy bridge network fronting
+  PortFolio and TruthSeeker, so it is SSRF against your own services. It needs a scheme-and-resolved-IP
+  guard, which should also be retrofitted onto the currently-unguarded ICS fetch.
+
+**Deferred on cost/benefit:**
+- *Anki `.apkg`* — the highest-effort parser against the lowest certainty of need: zip + zstd, plus a
+  new read-only non-migrating SQLite connection path (today's `db.rs` unconditionally runs
+  `sqlx::migrate!`, which would try to migrate your Anki file), plus notetype schema variants and
+  zip-slip guards. Increment 14's CSV path covers the common case.
+- *KaTeX* — would be the **first** addition to `ui/package.json`'s deliberate two-dependency list.
+  Against the current measured baseline — `vite build` reports 57.98 kB gzip JS and 4.29 kB gzip CSS —
+  it is roughly +90 KB gzip JS, +23 KB CSS and the app's first web fonts, i.e. **larger than the entire
+  existing application**. (The KaTeX figures are from knowledge, not measured here.) Server-side MathML is not the
+  cheaper escape: it needs `dangerouslySetInnerHTML` on model output, trading bytes for an XSS surface
+  in an app that currently has none.
+- *Card images / Anki media* — no BLOB or file-path column anywhere, and `/app/data` is a volume but is
+  not served. Would also be a new content-sniffing surface.
+- *Nested folders* — the schema's first self-referential FK, a cycle guard on every move (an infinite
+  subtree loop under `panic="abort"` kills the container), and a tree UI for which `App.css` has zero
+  precedent. Courses → decks plus tags already does the thing folders cannot: group across courses.
+- *Deck/course chat* — needs prompt **replay** every turn, because the provider passes
+  `--no-session-persistence` and the request type has no messages array. Cost is O(turns²) and a
+  10-turn conversation is 10 sequential process spawns at up to 180s each, with no streaming.
+- *FTS5 search* — verified **available** (the sqlx `sqlite` feature resolves to bundled SQLite built
+  with FTS5), so not a dead end. But it needs either the schema's first triggers or three extra writes
+  per card mutation to beat a `LIKE` scan that is imperceptible over low-thousands of rows.
+- *Email reminders* — Hetzner blocks outbound port 25, so this needs an SMTP relay account you must
+  create, plus `lettre`, plus four env vars that require a manual SSH session (the deploy job only runs
+  `docker compose pull && up -d`). A daily email about an app you open daily is thin return.
+- *Web push* — **permanently unavailable on one of your two clients**: there is no service-worker push
+  in WRY's WebView2 or WebKitGTK, so the Tauri desktop app can never receive one. Increment 24's
+  installable manifest is the honest substitute.
+- *A background cron/interval task* — nothing in scope needs one: countdowns and the nudge are computed
+  on read. It would also need a persisted `last_run_at`, since the container is recreated on every deploy.
+- *Backfilling `practice_attempts` into the review log* — the data genuinely exists, and it belongs in an
+  idempotent admin **endpoint**, never a migration. Deferred because it produces `card_id`-NULL rows
+  every analytics query must then handle deliberately, for a one-week head start on non-empty charts.
+
+---
+
+## 8. Open questions — both need your answer before increment 6
+
+**Q1. Have you run the snapshot script against the production volume, and is WAL OK?**
+This is the only hard gate on increment 6 and it is genuinely irreversible. Once migration 0005
+applies you cannot roll the image back — the older binary boot-panics and takes the frontend with it.
+Increment 1 gives you the script and runbook; I need confirmation you actually ran it before 0005
+ships. Separately, 0005 enables WAL, which changes the on-disk representation of your only copy of the
+data (`-wal`/`-shm` files appear beside `coursemaster.db`).
+**Recommendation: yes to both — run the backup, enable WAL in the same commit as 0005.**
+
+**Q2. Keep bundling `ui/dist` in the Tauri shell, or point the window at the hosted origin?**
+`tauri.conf.json` sets `frontendDist: "../../ui/dist"` with **no** remote `url`, so the installed
+desktop app serves a frozen snapshot of the frontend while the API moves on. Since adding an endpoint
+is a three-place edit (router, `api.ts`'s `resolveRequest`, `types.ts`), the desktop copy silently
+misses the last two and throws `Unknown command` at runtime — and nothing catches it, because CI has no
+`cargo tauri build`. By increment 20 an installed desktop app would be badly broken.
+- **(a)** Add a remote `url` pointing at `https://coursemaster.iambeep.com` — one line, eliminates the
+  whole skew class, and makes the "same bundle over HTTPS" architecture note actually true. Costs: the
+  app needs network to open (already effectively true — no local DB, no local AI), and it moves from
+  `csp: null` to whatever CSP the shared Caddy sends. Needs a local `cargo tauri build` to validate.
+- **(b)** Keep bundling, and treat the desktop shell as requiring a manual rebuild-and-reinstall after
+  every endpoint change.
+
+**Recommendation: (a), as a standalone commit alongside increment 5, before the endpoint count climbs.**
+
+---
+
+## 9. Progress log
+
+### ✅ Increment 1 — Production safety net + JWT hardening
+
+- `scripts/backup-db.sh` — `sqlite3 .backup` (not a file copy, which races with
+  in-flight writes and would miss the `-wal` sidecar), verifies `integrity_check`,
+  prints a row summary, pulls a copy to `./backups`. Installs `sqlite3` into the
+  container on demand, since the runtime image has none and an install there does
+  not survive a recreate.
+- `scripts/restore-db.sh` — verifies the snapshot *before* touching anything,
+  snapshots the database it is about to replace, then stops the container and
+  swaps the file **on the host** at the path resolved from `docker inspect`.
+- `DEPLOY.md` §7 — snapshot docs plus a pre-migration runbook, including the fact
+  that an image rollback cannot undo a migration (`VersionMissing` boot-panic
+  takes the frontend down with the API).
+- `auth.rs` — `iss`/`aud` added to `BridgeClaims` as required `String`s and
+  `set_required_spec_claims(["exp","iss","aud"])`. Verified against PortFolio's
+  `crossAppToken.js` that `aud` is minted as a single string, so a sequence type
+  would have 401'd every real token. **11 new tests.**
+
+**Both scripts were exercised end to end, not just written.** The restore ran
+against a throwaway container seeded with wrong data and stale sidecars
+(`courses=0` → `courses=5`), which caught two real bugs in my own first draft:
+the `-wal`/`-shm` cleanup used `docker exec` on a *stopped* container so it
+silently never ran, and snapshot verification was skipped entirely because the VPS
+host has no `sqlite3`. Production was never stopped (`Up 4 weeks` throughout).
+
+A test also caught that `Validation` carries a **60s default `leeway`**, so a
+token a few seconds past `exp` is still valid. That is correct (it absorbs clock
+skew against PortFolio, whose bridge TTL is 900s) and is now pinned by a test.
+
+**This answers Q1's first half:** a verified snapshot exists at
+`/opt/coursemaster/backups/coursemaster-20261004-022139.db` (and locally),
+`courses=5 assignments=1 extractions=1 feeds=1 schema_version=4`. The WAL half of
+Q1 is still open, and is only needed at increment 6.
+
+### Remaining
+
+Status line per increment as each lands, plus anything deferred.
+
+**Prerequisite, already done (not part of the 24):** the three D2L calendar-crawler defects — UTC read
+as a local date, one item becoming three via D2L's `Available`/`Availability Ends`/`Due` state events,
+and missing RFC 5545 text unescaping — are fixed and verified against the live feed (107 raw events →
+86 canonical deadlines across 7 courses), and the polluted production rows have been cleaned up from a
+verified backup. That work is **uncommitted** at the time of writing; increment 2 touches
+`document-engine` call sites and increment 15 touches its `Cargo.toml`, so **land the calendar work
+first.**
