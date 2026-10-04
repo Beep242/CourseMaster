@@ -111,19 +111,39 @@ pub async fn list_by_feed(pool: &SqlitePool, feed_id: &str) -> Result<Vec<Syllab
     rows.into_iter().map(row_to_syllabus).collect()
 }
 
-/// UIDs of every extraction already imported (any review state) for a given
-/// feed, across all of its past sync batches — lets a sync skip events it's
-/// already seen instead of re-inserting duplicates every run.
-pub async fn known_external_uids_for_feed(pool: &SqlitePool, feed_id: &str) -> Result<Vec<String>, CoreError> {
-    let rows: Vec<String> = sqlx::query_scalar(
-        "SELECT se.external_uid FROM syllabus_extractions se \
+/// The identity of one already-imported calendar-feed item.
+pub struct KnownFeedItem {
+    pub external_uid: Option<String>,
+    pub title: String,
+    pub external_org_unit_id: Option<String>,
+}
+
+/// Every extraction already imported (in any review state) for a given feed,
+/// across all of its past sync batches. A sync skips events it has already
+/// seen instead of re-inserting duplicates every run, and it needs more than
+/// the UID to do that: D2L emits a separate VEVENT — with its own UID — for
+/// each state change of the same coursework item, so the caller also derives
+/// a per-item identity from `title` + `external_org_unit_id` to recognise a
+/// sibling event of something already imported. See
+/// `document_engine::calendar_feed::canonical_key`.
+pub async fn known_feed_items(pool: &SqlitePool, feed_id: &str) -> Result<Vec<KnownFeedItem>, CoreError> {
+    let rows = sqlx::query(
+        "SELECT se.external_uid, se.title, se.external_org_unit_id FROM syllabus_extractions se \
          JOIN syllabi s ON s.id = se.syllabus_id \
-         WHERE s.calendar_feed_id = ? AND se.external_uid IS NOT NULL",
+         WHERE s.calendar_feed_id = ?",
     )
     .bind(feed_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows)
+    rows.into_iter()
+        .map(|r| {
+            Ok(KnownFeedItem {
+                external_uid: r.try_get("external_uid")?,
+                title: r.try_get("title")?,
+                external_org_unit_id: r.try_get("external_org_unit_id")?,
+            })
+        })
+        .collect()
 }
 
 pub struct NewExtraction {
