@@ -4,6 +4,7 @@ use academic_core::repo::courses;
 use academic_core::repo::practice_tests::{self, NewPracticeQuestion};
 use academic_core::SqlitePool;
 use ai_engine::{AiProvider, ExtractionRequest};
+use grading::Verdict;
 
 use crate::error::DocumentError;
 
@@ -139,7 +140,10 @@ const GRADE_SYSTEM_PROMPT: &str = "You are grading a college student's short-ans
 Judge whether it demonstrates correct understanding — it does not need to match word-for-word, just be substantively \
 correct. Respond with structured JSON only.";
 
-async fn grade_short_answer(ai: &dyn AiProvider, question: &PracticeQuestion, submitted: &str) -> (bool, Option<String>) {
+/// Asks the model to judge a short answer. Reached only when
+/// `grading::grade_short_answer` returned `Undecided`, because every call here
+/// costs real money and can take up to 180 seconds.
+async fn adjudicate_short_answer(ai: &dyn AiProvider, question: &PracticeQuestion, submitted: &str) -> (bool, Option<String>) {
     if submitted.trim().is_empty() {
         return (false, Some("No answer submitted.".to_string()));
     }
@@ -171,11 +175,23 @@ async fn grade_short_answer(ai: &dyn AiProvider, question: &PracticeQuestion, su
     }
 }
 
-/// Grades multiple_choice/true_false by exact (case-insensitive) match
-/// against the stored correct answer — no AI call needed, no ambiguity to
-/// judge. short_answer genuinely needs judgment, so those go through the
-/// model one at a time. "Teaching, not just marking wrong" (per spec) means
-/// every question carries feedback either way, not just a checkmark.
+/// Grades an attempt through `crates/grading` first, and only asks the model
+/// about answers that crate could not decide.
+///
+/// multiple_choice and true_false are always decisive — the student picked from
+/// a fixed list, so there is no phrasing to interpret. short_answer runs the
+/// deterministic ladder (normalise, compare as numbers, allow a length-scaled
+/// typo budget); an exact match, a formatting difference, a thousands
+/// separator, a typo or a plainly different one-word answer all resolve for
+/// free. Only genuine phrasing ambiguity reaches the model.
+///
+/// This used to send *every* short answer to `claude -p`, including ones
+/// identical to the model answer — a per-question cost and up to 180s of
+/// latency to confirm the obvious.
+///
+/// "Teaching, not just marking wrong" (per spec) means every question carries
+/// feedback either way, not just a checkmark; the deterministic paths use the
+/// question's stored explanation, which is free and instant.
 pub async fn grade_attempt(
     pool: &SqlitePool,
     ai: &dyn AiProvider,
@@ -193,10 +209,19 @@ pub async fn grade_attempt(
     for question in &questions {
         let submitted = answers.iter().find(|a| a.question_id == question.id).map(|a| a.response.clone()).unwrap_or_default();
         let (is_correct, feedback) = match question.kind {
-            QuestionKind::MultipleChoice | QuestionKind::TrueFalse => {
-                (submitted.trim().eq_ignore_ascii_case(question.correct_answer.trim()), question.explanation.clone())
+            QuestionKind::MultipleChoice => {
+                (grading::grade_choice(&submitted, &question.correct_answer).is_correct(), question.explanation.clone())
             }
-            QuestionKind::ShortAnswer => grade_short_answer(ai, question, &submitted).await,
+            QuestionKind::TrueFalse => {
+                (grading::grade_true_false(&submitted, &question.correct_answer).is_correct(), question.explanation.clone())
+            }
+            QuestionKind::ShortAnswer => match grading::grade_short_answer(&submitted, &[question.correct_answer.as_str()]) {
+                // Settled deterministically: no subprocess, no cost, no wait.
+                Verdict::Correct => (true, question.explanation.clone()),
+                Verdict::Incorrect => (false, question.explanation.clone()),
+                // Genuinely ambiguous phrasing — the one case worth paying for.
+                Verdict::Undecided => adjudicate_short_answer(ai, question, &submitted).await,
+            },
         };
         if is_correct {
             correct_count += 1;

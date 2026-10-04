@@ -7,6 +7,7 @@ members = [
     "crates/document-engine",
     "crates/scheduler",
     "crates/srs",
+    "crates/grading",
     "desktop/src-tauri",
 ]
 
@@ -35,6 +36,7 @@ api-server = { path = "crates/api-server" }
 document-engine = { path = "crates/document-engine" }
 scheduler = { path = "crates/scheduler" }
 srs = { path = "crates/srs" }
+grading = { path = "crates/grading" }
 
 [profile.release]
 panic = "abort"

@@ -875,6 +875,7 @@ dependencies = [
  "ai-engine",
  "chrono",
  "chrono-tz",
+ "grading",
  "ical",
  "reqwest 0.12.28",
  "serde",
@@ -1463,6 +1464,13 @@ dependencies = [
  "glib-sys",
  "libc",
  "system-deps",
+]
+
+[[package]]
+name = "grading"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

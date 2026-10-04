@@ -485,6 +485,44 @@ that card — and since `f64::NAN as u32` saturates to 0, the interval would hav
 been clamped up from zero and the card silently rescheduled as brand new.
 `clamp_ease` now resets a non-finite ease to the default.
 
+### ✅ Increment 4 — `crates/grading`, and the existing grader refactored onto it
+
+New pure crate (`serde` only). `Verdict { Correct, Incorrect, Undecided }` plus
+`normalize`, `levenshtein`, `typo_budget`, `parse_numeric`, `grade_short_answer`,
+`grade_choice`, `grade_true_false`, `parse_boolean`.
+
+Grading is a ladder, cheapest rung first: normalise and compare → compare as
+numbers with a unit check → allow a typo budget scaled to answer length → only
+then `Undecided`.
+
+`Undecided` is deliberately **not** a synonym for "probably wrong". A one-word
+mismatch is `Incorrect`: paying a model to confirm that "meiosis" is not
+"mitosis" spends money to reach the obvious. `Undecided` is for real ambiguity —
+multi-word free text, or a right number with a missing or mismatched unit.
+
+Resolved for free: case and whitespace, edge and intra-word punctuation, curly
+quotes and en/em dashes (what Word and PDFs substitute silently), thousands
+separators (`1,000` = `1000`), `5` = `5.0` = `1e3`, `0.5` = `1/2`, `5Ω` = `5 Ω`,
+and typos scaled to length. A wrong *number* is never rescued by the typo
+budget, so `24` against `42` stays wrong despite being 2 edits on a 2-char
+answer.
+
+**Refactored `practice_test.rs::grade_attempt`.** It previously sent *every*
+short answer to `claude -p` — including answers identical to the model answer —
+at real cost and up to 180s each. Now MC uses `grade_choice`, TF uses
+`grade_true_false` (which also accepts `T`/`yes`/`1`), and short answers only
+reach the model on `Undecided`. MC/TF also got stricter: the old
+`eq_ignore_ascii_case` missed whitespace, punctuation and non-ASCII case.
+
+**27 tests**, including an adversarial pass over nulls, emoji, 5000-char
+strings, `1/0`, `1e999999`, bare `-`/`.`/`+`, `NaN` and combining marks,
+asserting nothing panics. Two of my own assertions were wrong and the code's
+behaviour was the question — fixing them properly meant deciding that
+apostrophes and commas are *intra-word* (removed, so `it's` = `its`) while `/`
+survives next to any alphanumeric so `m/s2` stays one token.
+
+**109 tests pass workspace-wide.**
+
 ### Remaining
 
 Status line per increment as each lands, plus anything deferred.
