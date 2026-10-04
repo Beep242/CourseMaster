@@ -58,6 +58,26 @@ function resolveRequest(cmd: string, args: Record<string, unknown>): Req {
       return { method: "POST", path: `/extractions/${encodeURIComponent(String(args.extractionId))}/reject` };
     case "ask_syllabus":
       return { method: "POST", path: `/syllabi/${encodeURIComponent(String(args.syllabusId))}/ask`, body: { question: args.question } };
+    case "list_decks":
+      return { method: "GET", path: withQuery("/decks", { course_id: args.courseId }) };
+    case "create_deck":
+      return { method: "POST", path: "/decks", body: args.input };
+    case "get_deck":
+      return { method: "GET", path: `/decks/${encodeURIComponent(String(args.id))}` };
+    case "update_deck":
+      return { method: "PATCH", path: `/decks/${encodeURIComponent(String(args.id))}`, body: args.patch };
+    case "delete_deck":
+      return { method: "DELETE", path: `/decks/${encodeURIComponent(String(args.id))}` };
+    case "list_cards":
+      return { method: "GET", path: `/decks/${encodeURIComponent(String(args.deckId))}/cards` };
+    case "create_card":
+      return { method: "POST", path: `/decks/${encodeURIComponent(String(args.deckId))}/cards`, body: args.input };
+    case "update_card":
+      return { method: "PATCH", path: `/cards/${encodeURIComponent(String(args.id))}`, body: args.patch };
+    case "delete_card":
+      return { method: "DELETE", path: `/cards/${encodeURIComponent(String(args.id))}` };
+    case "search_cards":
+      return { method: "GET", path: withQuery("/cards/search", { q: args.query, limit: args.limit }) };
     case "prioritized_today":
       return { method: "GET", path: "/prioritized" };
     case "ai_status":

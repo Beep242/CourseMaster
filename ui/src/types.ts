@@ -173,3 +173,83 @@ export interface PracticeAttempt {
   answers: GradedAnswer[];
   completed_at: string;
 }
+
+export type CardKind = "basic" | "multiple_choice" | "true_false" | "typed";
+
+export interface Deck {
+  id: string;
+  /** null means the deck is not filed under a course yet. */
+  course_id: string | null;
+  name: string;
+  description: string | null;
+  color: string;
+  /** Computed server-side from the cards table, not a cached column. */
+  card_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NewDeck {
+  course_id?: string | null;
+  name: string;
+  description?: string | null;
+  color?: string | null;
+}
+
+/**
+ * Omit a field to leave it alone; send an explicit `null` to clear it. That
+ * distinction is why the Rust side uses `Patch<T>` rather than the plain
+ * `Option` convention the older update types use — see `models::Patch`.
+ */
+export interface DeckUpdate {
+  name?: string;
+  color?: string;
+  course_id?: string | null;
+  description?: string | null;
+}
+
+export interface Card {
+  id: string;
+  deck_id: string;
+  order_index: number;
+  kind: CardKind;
+  front: string;
+  back: string;
+  /** Only set for multiple_choice; generated once at save time, not per review. */
+  options: string[] | null;
+  explanation: string | null;
+  tags: string[];
+  /** The passage a generated card came from; null for a hand-written card. */
+  source_excerpt: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NewCard {
+  front: string;
+  back: string;
+  kind?: CardKind;
+  options?: string[] | null;
+  explanation?: string | null;
+  tags?: string[] | null;
+  source_excerpt?: string | null;
+  order_index?: number;
+}
+
+/** Same omit-vs-null semantics as DeckUpdate. */
+export interface CardUpdate {
+  front?: string;
+  back?: string;
+  kind?: CardKind;
+  order_index?: number;
+  deck_id?: string;
+  options?: string[] | null;
+  explanation?: string | null;
+  tags?: string[] | null;
+}
+
+/** A card plus where it lives, so a search hit is identifiable. */
+export interface CardSearchHit extends Card {
+  deck_name: string;
+  course_name: string | null;
+}

@@ -8,6 +8,7 @@ through the user's own Claude Code CLI (`claude -p`) — no Anthropic API key an
 ## Layout
 
 - `crates/academic-core` — models, sqlx/SQLite pool, `repo/*` (one module per table), `migrations/`
+- `crates/srs` — SM-2 spaced repetition; `crates/grading` — deterministic answer matching. Both pure like `scheduler`
 - `crates/scheduler` — pure prioritization scoring; deliberately no `academic-core` dependency
 - `crates/document-engine` — `syllabus_extraction`, `calendar_feed` (D2L ICS), `study_guide`, `practice_test`
 - `crates/ai-engine` — `AiProvider` trait + `ClaudeCliProvider` (subprocess); the only AI seam
@@ -36,7 +37,7 @@ is configured (no rustfmt.toml, clippy.toml, or eslint config).
 - `ui/src/api.ts` is a compatibility shim: page components still call Tauri-style `invoke("command_name", {...})`,
   and `resolveRequest`'s switch maps each name to an HTTP method + path. **Adding an endpoint means editing two
   places**: the router in `crates/api-server/src/main.rs` and that switch.
-- **No auth middleware.** The router carries no auth layer — each of the 39 handlers takes the `AuthUser`
+- **No auth middleware.** The router carries no auth layer — each of the 49 handlers takes the `AuthUser`
   extractor (`crates/api-server/src/auth.rs`) as an argument, so a new handler that omits it is public.
   `AuthUser` verifies the HS256 bridge JWT, then 403s any email != `OWNER_EMAIL`.
 - Auth: no passwords here. `ui/src/bridgeAuth.ts` POSTs PortFolio's `/api/auth/token?app=coursemaster` (**not**
@@ -81,6 +82,19 @@ is configured (no rustfmt.toml, clippy.toml, or eslint config).
 - `ical` 0.11 unfolds continuation lines (space *and* tab) but does **no** RFC 5545 text unescaping, so
   SUMMARY/DESCRIPTION/LOCATION go through `unescape_ics_text` — otherwise `General Chem I (02\, 934)` becomes
   a course name containing literal backslashes.
+- Flashcards (0005): `decks` -> `cards`, one deck per card, reaching a course transitively via the nullable
+  `decks.course_id` (nullable so an import can land before it is filed). Deliberately *not* built on
+  `practice_questions`, which is cascade-owned by one test row and has no timestamps, tags, media or provenance.
+  `cards.source_excerpt` is nullable because a hand-written card has no source — and SQLite cannot relax a
+  NOT NULL later. `decks.card_count` is computed in the SELECT, not cached: there are no triggers in this
+  schema, so a cached count would drift the first time a cascade deleted a card.
+- `models::Patch<T>` (= `Option<Option<T>>` + `deserialize_patch`) is used by `DeckUpdate`/`CardUpdate` and
+  **differs from the house convention on purpose**. Elsewhere a patch field of `None` means "keep", which can
+  never set a nullable column back to NULL; a student editing a generated card has to be able to *delete* a
+  wrong explanation. Absent = keep, explicit `null` = clear, value = set.
+- `db::connect` sets `journal_mode=WAL` and a 5s `busy_timeout`. WAL means `-wal`/`-shm` files appear beside
+  the database — which is why `scripts/restore-db.sh` deletes them during a restore (they describe the database
+  being replaced). `connect_in_memory` deliberately does not set it; WAL is meaningless for `:memory:`.
 - Study tools: guides use `AiProvider::complete` (Markdown); practice tests use `extract_structured` + a JSON schema, and an attempt is one `answers_json` blob with short answers model-graded.
 
 ## Conventions & gotchas

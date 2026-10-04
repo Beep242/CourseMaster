@@ -563,6 +563,59 @@ for the radio was a no-op (Chrome ignores author border-radius on a
 default-appearance radio), so that was removed rather than left looking
 load-bearing.
 
+### ✅ Q1 and Q2 — answered by taking the recommended defaults
+
+You said carry on without answering, so I took both recommendations and am
+recording them as decisions rather than leaving them hanging.
+
+**Q2 (Tauri), done first** — `frontendDist` is now the URL
+`https://coursemaster.iambeep.com` instead of a bundled `ui/dist`. Done *before*
+increment 6 precisely because that increment adds endpoints, which is what the
+skew feeds on. Validated with `cargo tauri info` and `cargo build -p
+course-master`. The validation earned its keep: my first attempt documented the
+choice in a `_comment` key, and the config is schema-validated and rejects
+unknown top-level properties, so it failed to parse. Rationale moved to
+`CLAUDE.md`.
+
+**Q1 (WAL)** — enabled in the same commit as 0005, as recommended.
+
+### ✅ Increment 6 — Migration 0005: decks + cards, WAL, repo layer, HTTP API
+
+- **Migration 0005**: `decks` (nullable `course_id`) + `cards` (`deck_id NOT
+  NULL`, cascade). `cards.source_excerpt` nullable, `image_data_uri` reserved.
+  Additive only — no table rebuild, so no cascade risk.
+- **WAL + 5s `busy_timeout`** in `db::connect`. `connect_in_memory` deliberately
+  skips it (meaningless for `:memory:`).
+- **`models::Patch<T>`** = `Option<Option<T>>` + a `deserialize_patch` helper.
+  This is a deliberate divergence from the house convention, where a patch field
+  of `None` means "keep" and there is therefore no way to set a nullable column
+  back to NULL. A student editing a generated card must be able to *delete* a
+  wrong explanation.
+- **`repo/decks.rs` + `repo/cards.rs`**, including `create_many` in one
+  transaction (a half-saved set of approved cards is worse than none) and
+  `search` as a `LIKE` scan with `%`/`_` escaped.
+- **10 new endpoints**, all gated by `AuthUser`.
+- **`api.ts` + `types.ts`** — the other two places an endpoint has to be added.
+
+**Deviation from the plan:** I left `deck_sources` out. The plan put it here,
+but nothing writes it until increment 10, and increment 9 already creates the
+import staging tables where a deck's source material naturally belongs. An
+unused table in production is schema debt.
+
+**Verified by booting the server against a throwaway database**, not just by
+unit tests: migration 0005 applied, the router constructed without a route
+conflict, WAL confirmed by `-wal`/`-shm` appearing on disk, and then the full
+API exercised with a minted token — 401 without one, name trimmed, `card_count`
+going 0→2, search carrying deck and course name, 404 for a missing deck, 404 for
+a card added to a missing deck, 400 for a blank front, cascade on deck delete,
+and the `Patch` semantics proven over real JSON (`"explanation":"x"` sets,
+`"explanation":null` clears, `front` untouched by both).
+
+Also checked that **every one of the 49 handlers takes `AuthUser`** — the router
+has no auth layer, so a handler that omits it is silently public.
+
+**130 rust tests pass** (24 in academic-core, up from 5); tsc clean.
+
 ### Remaining
 
 Status line per increment as each lands, plus anything deferred.

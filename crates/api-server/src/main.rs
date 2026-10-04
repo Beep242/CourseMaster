@@ -111,6 +111,21 @@ async fn main() {
         .route("/extractions/{id}/approve", post(handlers::syllabus::approve_extraction))
         .route("/extractions/{id}/reject", post(handlers::syllabus::reject_extraction))
         .route("/prioritized", get(handlers::scheduler::prioritized_today))
+        // Flashcards. Adding any of these means editing ui/src/api.ts's
+        // resolveRequest switch too -- the router is only half the contract.
+        .route("/decks", get(handlers::decks::list_decks).post(handlers::decks::create_deck))
+        .route(
+            "/decks/{id}",
+            get(handlers::decks::get_deck)
+                .patch(handlers::decks::update_deck)
+                .delete(handlers::decks::delete_deck),
+        )
+        .route("/decks/{id}/cards", get(handlers::decks::list_cards).post(handlers::decks::create_card))
+        .route(
+            "/cards/{id}",
+            axum::routing::patch(handlers::decks::update_card).delete(handlers::decks::delete_card),
+        )
+        .route("/cards/search", get(handlers::decks::search_cards))
         .route("/calendar-feeds", get(handlers::calendar::list_feeds).post(handlers::calendar::create_feed))
         .route("/calendar-feeds/{id}/sync", post(handlers::calendar::sync_feed))
         .route("/calendar-feeds/{id}/syllabi", get(handlers::calendar::list_feed_batches))

@@ -242,6 +242,28 @@ pub struct NewSubtask {
     pub order_index: i64,
 }
 
+/// Distinguishes "the client did not mention this field" from "the client
+/// explicitly sent null to clear it".
+///
+/// The house patch convention everywhere else is read-modify-write with `None`
+/// meaning *keep* (see `AssignmentUpdate` and `ExtractionEdits`), which has no
+/// way to set a nullable column back to NULL. That is fine for an assignment,
+/// and not fine for a card: a student editing an AI-generated card will
+/// absolutely want to delete a wrong explanation. With this, an absent field is
+/// `None` (keep), an explicit `null` is `Some(None)` (clear), and a value is
+/// `Some(Some(v))` (set).
+pub type Patch<T> = Option<Option<T>>;
+
+/// Needed because `#[serde(default)]` alone cannot tell an absent field from a
+/// present `null` — both would deserialize to `None`.
+pub fn deserialize_patch<'de, T, D>(deserializer: D) -> Result<Patch<T>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StudyGuide {
     pub id: Id,
@@ -288,4 +310,121 @@ pub struct PracticeAttempt {
 pub struct SubmittedAnswer {
     pub question_id: Id,
     pub response: String,
+}
+
+string_enum!(CardKind {
+    Basic => "basic",
+    MultipleChoice => "multiple_choice",
+    TrueFalse => "true_false",
+    Typed => "typed",
+}, default = Basic);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Deck {
+    pub id: Id,
+    /// None means the deck is not filed under a course yet — an import can
+    /// land before that decision is made. See migration 0005.
+    pub course_id: Option<Id>,
+    pub name: String,
+    pub description: Option<String>,
+    pub color: String,
+    pub card_count: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewDeck {
+    #[serde(default)]
+    pub course_id: Option<Id>,
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub color: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DeckUpdate {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub color: Option<String>,
+    /// Clearable: moving a deck out of a course is a real action.
+    #[serde(default, deserialize_with = "deserialize_patch")]
+    pub course_id: Patch<Id>,
+    #[serde(default, deserialize_with = "deserialize_patch")]
+    pub description: Patch<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Card {
+    pub id: Id,
+    pub deck_id: Id,
+    pub order_index: i64,
+    pub kind: CardKind,
+    pub front: String,
+    pub back: String,
+    /// Multiple-choice distractors, stored at save time so a review needs no
+    /// AI call. Only set for `multiple_choice`.
+    pub options: Option<Vec<String>>,
+    pub explanation: Option<String>,
+    pub tags: Vec<String>,
+    /// The verbatim passage a generated card came from; None for a card typed
+    /// by hand.
+    pub source_excerpt: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewCard {
+    pub front: String,
+    pub back: String,
+    #[serde(default)]
+    pub kind: Option<CardKind>,
+    #[serde(default)]
+    pub options: Option<Vec<String>>,
+    #[serde(default)]
+    pub explanation: Option<String>,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
+    #[serde(default)]
+    pub source_excerpt: Option<String>,
+    #[serde(default)]
+    pub order_index: Option<i64>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CardUpdate {
+    #[serde(default)]
+    pub front: Option<String>,
+    #[serde(default)]
+    pub back: Option<String>,
+    #[serde(default)]
+    pub kind: Option<CardKind>,
+    #[serde(default)]
+    pub order_index: Option<i64>,
+    /// Moving a card to another deck.
+    #[serde(default)]
+    pub deck_id: Option<Id>,
+    /// All clearable — a student editing a generated card needs to be able to
+    /// delete a bad explanation or a wrong set of distractors, not just
+    /// overwrite them.
+    #[serde(default, deserialize_with = "deserialize_patch")]
+    pub options: Patch<Vec<String>>,
+    #[serde(default, deserialize_with = "deserialize_patch")]
+    pub explanation: Patch<String>,
+    #[serde(default, deserialize_with = "deserialize_patch")]
+    pub tags: Patch<Vec<String>>,
+}
+
+/// A card plus the deck and course it belongs to, for cross-library search
+/// where a bare card gives the student no idea where it came from.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardSearchHit {
+    #[serde(flatten)]
+    pub card: Card,
+    pub deck_name: String,
+    pub course_name: Option<String>,
 }

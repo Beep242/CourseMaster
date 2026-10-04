@@ -1,6 +1,8 @@
 pub mod assignments;
 pub mod calendar_feeds;
+pub mod cards;
 pub mod courses;
+pub mod decks;
 pub mod practice_tests;
 pub mod profile;
 pub mod semesters;
