@@ -450,6 +450,41 @@ Q1 is still open, and is only needed at increment 6.
 were wrong and the code was right: `Ω` is 2 bytes not 3, and jsonwebtoken's
 `leeway` is 60s.
 
+### ✅ Increment 3 — `crates/srs` (SM-2)
+
+New crate with `serde` + `chrono` only, mirroring `crates/scheduler`'s
+precedent: no `academic-core`, no DB, no HTTP, no AI. Written before the
+migration that will store it, so `card_schedule`'s columns get transcribed from
+`CardState` rather than guessed.
+
+`CardState { repetitions, interval_days, ease_factor, due_date, lapses }`,
+`Rating { Again, Hard, Good, Easy }`, `review()`, `project_interval_days()`,
+`is_due()`, `is_new()`, `is_leech()`. Every tunable is a named public constant.
+
+Two documented departures from the 1987 paper:
+- **Ease deltas** are the gentler per-rating values rather than the paper's
+  q-derived ones. The paper's −0.80 for a lapse collapses a card from 2.5 to the
+  1.3 floor in two slips, and a card pinned at the floor stops being
+  distinguishable from one never seen.
+- **`Hard` gets its own 1.2× multiplier.** In the paper Hard and Good both
+  schedule at `interval × ease`, so pressing Hard shows the card again on
+  exactly the same day as Good — not what the button means. A test asserts
+  `hard < good` directly.
+
+**16 tests, all exact-equality.** Two are adversarial sweeps: one asserts
+`project_interval_days` (what the grade buttons will show) never disagrees with
+what `review` applies, across 600 state/rating combinations — a separate preview
+implementation is exactly the kind of thing that drifts unnoticed. The other
+sweeps `u32::MAX`, 0, negative, `f64::MAX`, `NaN` and both infinities and asserts
+nothing panics, no interval is 0, and no reviewed card is still due today.
+
+**That second sweep found a real bug in this crate:** `f64::clamp` passes a NaN
+*value* straight through (it only panics on NaN *bounds*), so a corrupt
+`ease_factor` would have been written back and poisoned every later review of
+that card — and since `f64::NAN as u32` saturates to 0, the interval would have
+been clamped up from zero and the card silently rescheduled as brand new.
+`clamp_ease` now resets a non-finite ease to the default.
+
 ### Remaining
 
 Status line per increment as each lands, plus anything deferred.
