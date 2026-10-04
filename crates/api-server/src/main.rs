@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use ai_engine::{AiProvider, ClaudeCliProvider};
+use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, post};
 use axum::Router;
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -16,8 +17,32 @@ use tower_http::trace::TraceLayer;
 
 use state::AppState;
 
+/// Bodies larger than this are rejected. Set explicitly because axum's own
+/// default is 2 MiB, which silently truncated pasted syllabus and note text
+/// long before anything in the app said so.
+const DEFAULT_MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
+
 fn env_or(key: &str, default: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| default.to_string())
+}
+
+/// Reads a tuning knob from the environment, treating unset, empty and
+/// unparseable all as "not configured". A typo in an optional knob should warn
+/// and fall back, not stop the server from booting — the required secrets
+/// (which genuinely must halt startup) are read with `expect` below instead.
+fn env_parsed<T: std::str::FromStr>(key: &str) -> Option<T> {
+    let raw = std::env::var(key).ok()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    match trimmed.parse::<T>() {
+        Ok(value) => Some(value),
+        Err(_) => {
+            tracing::warn!("ignoring {key}={raw:?} — not a valid value, using the default");
+            None
+        }
+    }
 }
 
 #[tokio::main]
@@ -36,6 +61,15 @@ async fn main() {
     let mut provider = ClaudeCliProvider::new().with_working_dir(ai_scratch);
     if let Ok(model) = std::env::var("CLAUDE_MODEL") {
         provider = provider.with_model(model);
+    }
+    if let Some(secs) = env_parsed::<u64>("AI_TIMEOUT_SECS") {
+        provider = provider.with_timeout_secs(secs);
+    }
+    if let Some(budget) = env_parsed::<f64>("AI_MAX_BUDGET_USD") {
+        provider = provider.with_max_budget_usd(Some(budget));
+    }
+    if let Some(chars) = env_parsed::<usize>("AI_MAX_INPUT_CHARS") {
+        provider = provider.with_max_input_chars(chars);
     }
     let ai: Arc<dyn AiProvider> = Arc::new(provider);
 
@@ -109,6 +143,12 @@ async fn main() {
     let static_dir = env_or("STATIC_DIR", "../../ui/dist");
     let index_path = format!("{static_dir}/index.html");
     let serve_dir = ServeDir::new(&static_dir).not_found_service(ServeFile::new(index_path));
+
+    // Only the API carries the limit — static assets are served from disk and
+    // are not request bodies.
+    let max_request_bytes = env_parsed::<usize>("MAX_REQUEST_BYTES").unwrap_or(DEFAULT_MAX_REQUEST_BYTES);
+    tracing::info!("max request body: {max_request_bytes} bytes");
+    let api_routes = api_routes.layer(DefaultBodyLimit::max(max_request_bytes));
 
     let app = Router::new()
         .nest("/api", api_routes)

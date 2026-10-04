@@ -41,6 +41,17 @@ pub struct ExtractionRequest {
     pub json_schema: serde_json::Value,
 }
 
+/// The JSON a structured extraction produced, plus what the call cost.
+/// Cost travels with the result rather than being discarded, so callers can
+/// record and eventually cap real spend — the other half of that is
+/// `ClaudeCliProvider::with_max_input_chars`, which bounds what a single call
+/// can be asked to read in the first place.
+#[derive(Debug, Clone)]
+pub struct ExtractionResponse {
+    pub value: serde_json::Value,
+    pub total_cost_usd: Option<f64>,
+}
+
 /// The single seam between the rest of the app and however Claude actually
 /// gets invoked. Nothing outside this crate should know or care whether
 /// that's a CLI subprocess, a future local model, or anything else — see
@@ -49,5 +60,5 @@ pub struct ExtractionRequest {
 pub trait AiProvider: Send + Sync {
     async fn is_available(&self) -> bool;
     async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, AiError>;
-    async fn extract_structured(&self, request: ExtractionRequest) -> Result<serde_json::Value, AiError>;
+    async fn extract_structured(&self, request: ExtractionRequest) -> Result<ExtractionResponse, AiError>;
 }

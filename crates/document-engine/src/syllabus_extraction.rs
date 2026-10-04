@@ -109,7 +109,7 @@ pub async fn process_syllabus(pool: &SqlitePool, ai: &dyn AiProvider, syllabus_i
         }
     };
 
-    let items = parse_extraction_response(&response);
+    let items = parse_extraction_response(&response.value);
     let count = items.len();
     if count > 0 {
         syllabus::insert_extractions(pool, syllabus_id, items).await?;

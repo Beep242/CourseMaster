@@ -421,6 +421,35 @@ skew against PortFolio, whose bridge TTL is 900s) and is now pinned by a test.
 `courses=5 assignments=1 extractions=1 feeds=1 schema_version=4`. The WAL half of
 Q1 is still open, and is only needed at increment 6.
 
+### ✅ Increment 2 — AI seam hardening
+
+- **Deadlock fixed.** The subprocess call now writes stdin, drains stdout *and*
+  stderr, and waits for exit concurrently inside one `timeout`, and kills the
+  child if it elapses. Added `stdin.shutdown()` — closing the pipe is what
+  signals end-of-prompt. Also returns `AiError::Io` rather than swallowing a
+  write failure.
+- **Panic fixed.** `truncate` steps back to a char boundary. Pinned by a test
+  that sweeps 60 byte-limits over a string of maths symbols, emoji and accents
+  and asserts it never panics and always returns valid UTF-8.
+- **Knobs:** `with_timeout_secs`, `with_max_budget_usd`, `with_max_input_chars`
+  on the provider; `AI_TIMEOUT_SECS`, `AI_MAX_BUDGET_USD`, `AI_MAX_INPUT_CHARS`
+  wired in `main.rs` via a new `env_parsed` that warns and falls back rather
+  than refusing to boot. Nonsense values (0, negative) fall back to defaults.
+- **Size guard:** `AI_MAX_INPUT_CHARS` (default 240k ≈ 60k tokens) is checked on
+  the *composed* prompt — system prompt and schema included — **before** the
+  spawn, so an oversized input fails in microseconds with an actionable message
+  instead of after 180s.
+- **Cost plumbing:** `extract_structured` now returns
+  `ExtractionResponse { value, total_cost_usd }`. Updated the 3 call sites.
+- **Also:** an explicit `DefaultBodyLimit` (`MAX_REQUEST_BYTES`, default 8 MiB)
+  on the API routes. Not strictly the AI seam, but axum's invisible 2 MiB
+  default was the *first* thing truncating a large paste, so it is the same
+  user-visible failure.
+
+**66 tests pass** (was 48 before this session). Two test expectations of mine
+were wrong and the code was right: `Ω` is 2 bytes not 3, and jsonwebtoken's
+`leeway` is 60s.
+
 ### Remaining
 
 Status line per increment as each lands, plus anything deferred.

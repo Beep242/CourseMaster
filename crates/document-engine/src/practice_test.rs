@@ -123,7 +123,7 @@ pub async fn generate_practice_test(
         })
         .await?;
 
-    let items = parse_questions(&response);
+    let items = parse_questions(&response.value);
     if items.is_empty() {
         return Err(DocumentError::EmptyGeneration("practice test".into()));
     }
@@ -159,9 +159,9 @@ async fn grade_short_answer(ai: &dyn AiProvider, question: &PracticeQuestion, su
         .extract_structured(ExtractionRequest { system_prompt: Some(GRADE_SYSTEM_PROMPT.to_string()), prompt, json_schema: schema })
         .await
     {
-        Ok(value) => {
-            let is_correct = value.get("is_correct").and_then(|v| v.as_bool()).unwrap_or(false);
-            let feedback = value.get("feedback").and_then(|v| v.as_str()).map(str::to_string);
+        Ok(response) => {
+            let is_correct = response.value.get("is_correct").and_then(|v| v.as_bool()).unwrap_or(false);
+            let feedback = response.value.get("feedback").and_then(|v| v.as_str()).map(str::to_string);
             (is_correct, feedback)
         }
         Err(err) => {

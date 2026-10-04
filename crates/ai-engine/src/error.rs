@@ -8,6 +8,8 @@ pub enum AiError {
     InvalidOutput(String),
     #[error("AI request timed out after {0}s")]
     Timeout(u64),
+    #[error("input is {chars} characters, over the {max}-character limit for a single AI call — split it into smaller pieces")]
+    InputTooLarge { chars: usize, max: usize },
     #[error("io error spawning claude CLI: {0}")]
     Io(#[from] std::io::Error),
 }

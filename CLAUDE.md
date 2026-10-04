@@ -45,6 +45,17 @@ is configured (no rustfmt.toml, clippy.toml, or eslint config).
   `--strict-mcp-config`, `--setting-sources ""`, a 180s timeout and a $0.50 budget cap, so no stray CLAUDE.md can
   influence it. System prompt and JSON schema go into **stdin, not argv** (cmd.exe re-quoting mangles schema JSON
   on Windows); it also retries `claude.cmd`/`claude.exe` (CreateProcessW does no PATHEXT search).
+- That subprocess call writes stdin, drains stdout *and* stderr, and waits for exit **concurrently, inside one
+  `timeout`**, then kills the child if it elapses. Writing first and waiting afterwards deadlocks: the write
+  blocks once the 64 KiB pipe buffer fills with nothing reading stdout, and that write used to sit outside the
+  timeout, so the hang was unbounded. `stdin.shutdown()` is what signals end-of-prompt — without it `claude`
+  waits for more input. Oversized prompts are rejected by `AI_MAX_INPUT_CHARS` before the spawn.
+- `truncate` (used only when model output fails to parse) steps back to a char boundary. `&s[..max]` panics
+  mid-character, and a panic is not contained here: `panic = "abort"`, `tower-http` has no `catch-panic`
+  feature so no `CatchPanicLayer` is possible, and this binary also serves `ui/dist` — so one malformed
+  response containing maths symbols took the whole site down.
+- `extract_structured` returns `ExtractionResponse { value, total_cost_usd }` rather than a bare
+  `serde_json::Value`, so a call's cost reaches the caller instead of being dropped.
 - Syllabus paste and D2L sync both land in `syllabus_extractions` as **pending**, and
   `repo::syllabus::approve_extraction` is the only code that inserts an `assignments` row — it refuses a
   non-pending extraction or one with no resolvable course. Nothing becomes an assignment without approval.
@@ -85,7 +96,11 @@ is configured (no rustfmt.toml, clippy.toml, or eslint config).
   PortFolio's), `OWNER_EMAIL`, `CLAUDE_CODE_OAUTH_TOKEN` in prod. Optional: `CROSS_APP_JWT_ISSUER`, `CROSS_APP_JWT_AUDIENCE`,
   `WEB_ALLOWED_ORIGINS` (an entry that fails to parse is dropped silently), `CLAUDE_MODEL`, `PORT`, `SQLITE_PATH`, `AI_SCRATCH_DIR`, `STATIC_DIR`,
   `LOCAL_TIMEZONE` (IANA name used to turn a feed's UTC deadlines into local dates; default `America/New_York`,
-  and an unparseable value silently falls back to that rather than failing a sync).
+  and an unparseable value silently falls back to that rather than failing a sync),
+  `AI_TIMEOUT_SECS` (default 180), `AI_MAX_BUDGET_USD` (default 0.50), `AI_MAX_INPUT_CHARS` (default 240000,
+  checked on the composed prompt *before* spawning), `MAX_REQUEST_BYTES` (default 8 MiB). The four tuning knobs
+  go through `env_parsed`, which warns and falls back on an unparseable value rather than refusing to boot —
+  unlike the required secrets, which `expect` and so halt startup deliberately.
 - Do not rebind the prod container to `127.0.0.1:8080` — Caddy reaches it via `host.docker.internal` from the
   bridge network; a loopback-only bind causes a silent 502.
 - Pushing to `main` triggers `build-and-push.yml` (GHCR push + SSH restart on the VPS): a push to main is a
