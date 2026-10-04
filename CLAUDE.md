@@ -87,8 +87,18 @@ is configured (no rustfmt.toml, clippy.toml, or eslint config).
 
 - Migrations are append-only numbered files in `crates/academic-core/migrations`, embedded by `sqlx::migrate!` at
   **compile time** and run by `db::connect` — a new file needs a rebuild, not just a restart; never edit an applied one.
-- `ui/dist` is gitignored but is what both the Docker image and Tauri (`frontendDist: ../../ui/dist`) serve;
-  `cargo tauri dev|build` invoke the ui npm script themselves via `beforeDevCommand`/`beforeBuildCommand`.
+- `ui/dist` is gitignored but is what the Docker image serves. The Tauri shell does **not** bundle it:
+  `frontendDist` is the URL `https://coursemaster.iambeep.com`, so the desktop app loads the same deployed
+  frontend the browser does. It used to bundle a snapshot, which froze the frontend at build time while the
+  API moved on — and since adding an endpoint is a three-place edit (router, `api.ts`'s `resolveRequest`,
+  `types.ts`), an installed build silently missed the last two and threw `Unknown command` at runtime, with
+  no CI job to catch it. The cost is that the app needs network to open, which was already true in practice
+  (no local DB, no local AI). No IPC is involved — this shell defines no custom commands — so the remote
+  page needs no elevated access and `dangerousRemoteDomainIpcAccess` stays unset.
+  `cargo tauri dev` still runs against the local vite server via `devUrl` + `beforeDevCommand`; there is no
+  `beforeBuildCommand` any more because there is no local frontend to build.
+- `tauri.conf.json` is schema-validated and rejects unknown top-level keys, so it cannot carry `_comment`
+  fields — rationale for a setting goes here instead.
 - The Dockerfile builds `-p api-server` and stubs `desktop/src-tauri`'s sources; keep server logic out of the desktop
   crate. `VITE_PORTFOLIO_URL` / `VITE_API_BASE_URL` are baked in at build time (Dockerfile build-args) and must be
   absolute — the same bundle runs inside Tauri, which has no origin to be relative to.
