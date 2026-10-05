@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import invoke from "../api";
-import type { CandidateEdits, CardCandidate, CardImport } from "../types";
+import type { CandidateEdits, CardCandidate, CardImport, ImportTextResult } from "../types";
 import { IconCheck, IconSparkle, IconX } from "../icons";
 
 interface Props {
@@ -39,6 +39,10 @@ export function CardReview({ deckId, deckName, onCardsChanged }: Props) {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+
+  const [pasteText, setPasteText] = useState("");
+  const [pasteResult, setPasteResult] = useState<ImportTextResult | null>(null);
+  const [importing, setImporting] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -129,6 +133,27 @@ export function CardReview({ deckId, deckName, onCardsChanged }: Props) {
     }
   }
 
+  async function runImport(dryRun: boolean) {
+    if (!pasteText.trim()) return;
+    setImporting(true);
+    setError(null);
+    try {
+      const result = await invoke<ImportTextResult>("import_text", {
+        deckId,
+        input: { text: pasteText, dry_run: dryRun },
+      });
+      setPasteResult(result);
+      if (!dryRun) {
+        setPasteText("");
+        onCardsChanged();
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setImporting(false);
+    }
+  }
+
   const reviewable = imports.filter((i) => i.pending_count > 0);
   const failed = imports.filter((i) => i.status === "failed");
 
@@ -166,6 +191,41 @@ export function CardReview({ deckId, deckName, onCardsChanged }: Props) {
         <div className="row" style={{ justifyContent: "flex-end" }}>
           <button type="button" disabled={generating || !material.trim()} onClick={generate}>
             <IconSparkle /> {generating ? "Writing cards… (up to 3 min)" : "Generate cards"}
+          </button>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <div className="card-header-title">
+            <h3>Already have a deck?</h3>
+          </div>
+        </div>
+        <p className="hint" style={{ marginTop: "-0.6rem" }}>
+          Paste a Quizlet or Anki export — one card per line, term and definition separated by a tab, comma or
+          &ldquo; - &rdquo;. The separator is detected for you. No AI, no cost, and re-pasting a corrected export
+          won&rsquo;t double the deck.
+        </p>
+        <textarea
+          rows={5}
+          value={pasteText}
+          onChange={(e) => setPasteText(e.target.value)}
+          placeholder="mole → 6.022e23 particles, one card per line (tab, comma or dash between the two sides)"
+        />
+        {pasteResult && (
+          <p className="hint">
+            Detected <strong>{pasteResult.separator}</strong> · {pasteResult.parsed} cards found
+            {pasteResult.created > 0 ? ` · ${pasteResult.created} added` : ""}
+            {pasteResult.duplicates > 0 ? ` · ${pasteResult.duplicates} already in this deck` : ""}
+            {pasteResult.skipped_lines > 0 ? ` · ${pasteResult.skipped_lines} lines skipped` : ""}
+          </p>
+        )}
+        <div className="row" style={{ justifyContent: "flex-end" }}>
+          <button type="button" className="btn-secondary" disabled={importing || !pasteText.trim()} onClick={() => runImport(true)}>
+            Preview
+          </button>
+          <button type="button" disabled={importing || !pasteText.trim()} onClick={() => runImport(false)}>
+            {importing ? "Importing…" : "Import"}
           </button>
         </div>
       </div>

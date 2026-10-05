@@ -195,3 +195,89 @@ pub async fn approve_all(
 ) -> Result<Json<ApproveAllResponse>, ApiError> {
     Ok(Json(ApproveAllResponse { approved: card_imports::approve_all(&state.pool, &import_id).await? }))
 }
+
+#[derive(Debug, Deserialize)]
+pub struct ImportTextBody {
+    pub text: String,
+    /// "tab" | "comma" | "semicolon" | "dash". Omitted means auto-detect.
+    #[serde(default)]
+    pub separator: Option<String>,
+    /// Parse and report without writing anything.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ImportTextResponse {
+    pub separator: String,
+    pub parsed: usize,
+    pub created: usize,
+    /// Pairs whose front already existed in this deck.
+    pub duplicates: usize,
+    pub skipped_lines: usize,
+    /// The first few, so the UI can show what it is about to create.
+    pub sample: Vec<document_engine::ParsedPair>,
+}
+
+/// Imports a pasted Quizlet/Anki deck straight into cards — deterministic, no
+/// AI call, no cost.
+///
+/// Re-importing a corrected export must not double the deck, so a pair whose
+/// front already exists here is counted and skipped. Matching uses
+/// `grading::normalize`, the same folding the answer grader uses, so "Mole" and
+/// "mole." are recognised as the same card rather than quietly duplicated.
+pub async fn import_text(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(deck_id): Path<String>,
+    Json(body): Json<ImportTextBody>,
+) -> Result<Json<ImportTextResponse>, ApiError> {
+    if decks::get(&state.pool, &deck_id).await?.is_none() {
+        return Err(ApiError::new(StatusCode::NOT_FOUND, format!("no deck {deck_id}")));
+    }
+    let separator = body.separator.as_deref().and_then(document_engine::FieldSeparator::parse);
+    let preview = document_engine::preview_deck_import(&body.text, separator);
+
+    let existing: std::collections::HashSet<String> = cards::list_by_deck(&state.pool, &deck_id)
+        .await?
+        .iter()
+        .map(|c| grading::normalize(&c.front))
+        .collect();
+
+    let mut seen = existing;
+    let mut fresh = Vec::new();
+    let mut duplicates = 0usize;
+    for pair in &preview.pairs {
+        // Inserted into `seen` as we go, so a paste containing the same term
+        // twice does not create it twice either.
+        if !seen.insert(grading::normalize(&pair.front)) {
+            duplicates += 1;
+            continue;
+        }
+        fresh.push(NewCard {
+            front: pair.front.clone(),
+            back: pair.back.clone(),
+            kind: None,
+            options: None,
+            explanation: None,
+            tags: None,
+            source_excerpt: None,
+            order_index: None,
+        });
+    }
+
+    let created = if body.dry_run || fresh.is_empty() {
+        0
+    } else {
+        cards::create_many(&state.pool, &deck_id, fresh).await? as usize
+    };
+
+    Ok(Json(ImportTextResponse {
+        separator: format!("{:?}", preview.separator).to_lowercase(),
+        parsed: preview.pairs.len(),
+        created,
+        duplicates,
+        skipped_lines: preview.skipped_lines,
+        sample: preview.pairs.into_iter().take(5).collect(),
+    }))
+}

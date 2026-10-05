@@ -78,6 +78,8 @@ function resolveRequest(cmd: string, args: Record<string, unknown>): Req {
       return { method: "DELETE", path: `/cards/${encodeURIComponent(String(args.id))}` };
     case "generate_cards":
       return { method: "POST", path: `/decks/${encodeURIComponent(String(args.deckId))}/imports`, body: args.input };
+    case "import_text":
+      return { method: "POST", path: `/decks/${encodeURIComponent(String(args.deckId))}/import-text`, body: args.input };
     case "list_imports":
       return { method: "GET", path: `/decks/${encodeURIComponent(String(args.deckId))}/imports` };
     case "list_candidates":

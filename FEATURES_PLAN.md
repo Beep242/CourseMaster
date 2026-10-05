@@ -789,6 +789,38 @@ end to end. History recorded `0→1 → 1→6 → 6→15`.
 Note: on a brand-new card all four buttons read "1 day". That is correct SM-2 —
 the first successful interval is fixed regardless of grade — not a bug.
 
+### ✅ Increment 14 — Quizlet / Anki paste import
+
+`document-engine/src/deck_import.rs` plus a paste box on the deck's **Generate
+from notes** tab. Entirely deterministic — no AI call, no cost, no latency. A
+deck you already wrote does not need a model to read it, and routing it through
+the review queue would be friction for content you authored yourself, so these
+become cards directly with duplicates reported rather than created.
+
+- **Separator auto-detected** (tab / comma / semicolon / `" - "`) by whichever
+  yields the most two-sided lines, tried tab-first and dash-last because a dash
+  appears inside ordinary prose far more often than a tab does.
+- **Quote-aware splitting**, so `"Boyle's law, simplified"` is not torn in half
+  by its own comma; only the *first* separator splits a line.
+- **HTML stripped**, which Anki exports carry by default, plus the common
+  entities.
+- **Idempotent**: a pair whose front already exists is skipped, matched with
+  `grading::normalize` — the same folding the answer grader uses — so "Mole" and
+  "mole." are recognised as the same card. A paste containing the same term
+  twice does not create it twice either.
+- Lines with no separator are skipped and counted, not fatal: an export often
+  starts with a header, and losing the other 200 cards over it would be absurd.
+- A **Preview** button parses and reports without writing.
+
+**21 tests.** One caught a real bug: dropping every tag outright fused the words
+either side of a `<br>` — "and&lt;br&gt;a break" became "anda break". Boundary
+tags now become a space while inline tags still vanish, so `un<b>frie</b>ndly`
+stays "unfriendly".
+
+Verified end to end: auto-detected tab, skipped the header, stripped the HTML,
+imported 3 — and **re-importing the same text created 0 and reported 3
+duplicates**, with the deck still holding exactly 3 cards.
+
 ### Remaining
 
 Status line per increment as each lands, plus anything deferred. Next:

@@ -89,6 +89,7 @@ dependencies = [
  "axum",
  "chrono",
  "document-engine",
+ "grading",
  "jsonwebtoken",
  "scheduler",
  "serde",

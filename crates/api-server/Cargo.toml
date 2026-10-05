@@ -15,6 +15,7 @@ ai-engine.workspace = true
 document-engine.workspace = true
 scheduler.workspace = true
 srs.workspace = true
+grading.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

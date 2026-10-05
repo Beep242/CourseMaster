@@ -130,6 +130,7 @@ async fn main() {
             "/decks/{id}/imports",
             get(handlers::decks::list_imports).post(handlers::decks::generate_cards),
         )
+        .route("/decks/{id}/import-text", post(handlers::decks::import_text))
         .route("/imports/{id}/candidates", get(handlers::decks::list_candidates))
         .route("/imports/{id}/approve-all", post(handlers::decks::approve_all))
         .route("/candidates/{id}/approve", post(handlers::decks::approve_candidate))

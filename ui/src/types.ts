@@ -335,3 +335,13 @@ export interface ReviewOutcome {
   /** This answer tipped the card past the lapse threshold. */
   is_leech: boolean;
 }
+
+export interface ImportTextResult {
+  separator: string;
+  parsed: number;
+  created: number;
+  /** Pairs whose front already existed in the deck. */
+  duplicates: number;
+  skipped_lines: number;
+  sample: { front: string; back: string }[];
+}
