@@ -821,6 +821,32 @@ Verified end to end: auto-detected tab, skipped the header, stripped the HTML,
 imported 3 — and **re-importing the same text created 0 and reported 3
 duplicates**, with the deck still holding exactly 3 cards.
 
+### ✅ Increment 17 — Typed-answer study mode
+
+A **Flip / Type the answer** switch on the Review page. Typing is graded by
+`crates/grading` through a new `POST /cards/{id}/check` — **no AI call**, so it
+is instant and free. Measured at **~2.4 ms** per answer.
+
+Correct and Incorrect resolve immediately and pre-select a grade (outlined);
+`Undecided` shows both answers side by side and deliberately suggests nothing,
+because guessing on the student's behalf is the exact thing to avoid. The
+keyboard handler stands down while the input has focus, or Space would make the
+field unusable.
+
+Verified live: `mitochondria` ✓, `Mitochondria.` ✓ (case and punctuation),
+`mitochondira` ✓ (typo budget), `nucleus` ✗, `the mitochondria organelle` →
+undecided. And in the browser: typed the typo, the card revealed, and **Good**
+came back outlined.
+
+**Fixed a real false negative found by this testing:** `6.022 x 10^23` was
+graded **incorrect** against `6.022e23`. Students write powers of ten longhand
+constantly, and this is a chemistry student's app. `parse_numeric` now reads a
+trailing `× 10^n`. The subtlety is that the multiplication sign has to be
+*optional*: `normalize` turns `×` and `*` into spaces (they are not
+alphanumeric), so `6.022 × 10^23` arrives as `6.022 10 23` — requiring the sign
+would have missed the very form most likely to be typed. A real unit is still
+safe: `5 x 10 apples` is not an exponent.
+
 ### Remaining
 
 Status line per increment as each lands, plus anything deferred. Next:

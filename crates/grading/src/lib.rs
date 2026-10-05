@@ -240,10 +240,52 @@ pub fn parse_numeric(normalized: &str) -> Option<Numeric> {
         }
     }
 
+    // Longhand scientific notation: "6.022 x 10^23", "6.022 × 10 23", "3*10^8".
+    // Students write powers of ten this way constantly in chemistry and
+    // physics, and without this `6.022 x 10^23` compares as the number 6.022
+    // and is marked wrong against `6.022e23` — a correct answer rejected.
+    // (`normalize` has already turned `^` into a space by this point.)
+    if let Some(exponent) = parse_power_of_ten_suffix(&rest) {
+        value *= 10f64.powi(exponent);
+        rest = String::new();
+    }
+
     if !value.is_finite() {
         return None;
     }
     Some(Numeric { value, unit: rest.split_whitespace().collect::<Vec<_>>().join(" ") })
+}
+
+/// Reads a trailing "× 10^n" and returns `n`. Returns `None` unless the whole
+/// remainder is that construction, so a genuine unit like "x 10 apples" is not
+/// mistaken for an exponent.
+fn parse_power_of_ten_suffix(rest: &str) -> Option<i32> {
+    let mut tokens: Vec<String> = rest.split_whitespace().map(str::to_string).collect();
+
+    // The multiplication sign is OPTIONAL, because `normalize` has usually
+    // already removed it: `×` and `*` are not alphanumeric so they become
+    // spaces, leaving "6.022 × 10^23" as "6.022 10 23". Only a literal `x`
+    // survives, since it is a letter. So both "x 10 23" and "10 23" have to be
+    // recognised, and requiring the sign would have missed the `×` form —
+    // which is the one a chemistry student is most likely to type.
+    if !tokens.is_empty() {
+        if matches!(tokens[0].as_str(), "x" | "×" | "*") {
+            tokens.remove(0);
+        } else if let Some(stripped) = tokens[0].strip_prefix(['x', '×', '*']).map(str::to_string) {
+            if stripped.is_empty() {
+                tokens.remove(0);
+            } else {
+                tokens[0] = stripped;
+            }
+        }
+    }
+
+    // Exactly "10" followed by the exponent and nothing else, so a real unit
+    // like "x 10 apples" is not mistaken for a power.
+    if tokens.len() != 2 || tokens[0] != "10" {
+        return None;
+    }
+    tokens[1].parse::<i32>().ok()
 }
 
 #[derive(Debug, PartialEq)]
@@ -473,6 +515,30 @@ mod tests {
         assert_eq!(grade_short_answer("1e3", &["1000"]), Verdict::Correct);
         assert_eq!(grade_short_answer("0.5", &["1/2"]), Verdict::Correct);
         assert_eq!(grade_short_answer("-5", &["-5.0"]), Verdict::Correct);
+    }
+
+    /// Students write powers of ten longhand constantly; marking that wrong
+    /// against the same value in `e` notation rejects a correct answer.
+    #[test]
+    fn longhand_scientific_notation_equals_e_notation() {
+        assert_eq!(grade_short_answer("6.022 x 10^23", &["6.022e23"]), Verdict::Correct);
+        assert_eq!(grade_short_answer("6.022 \u{d7} 10^23", &["6.022e23"]), Verdict::Correct);
+        assert_eq!(grade_short_answer("3 x 10^8", &["3e8"]), Verdict::Correct);
+        assert_eq!(grade_short_answer("3*10^8", &["300000000"]), Verdict::Correct);
+        assert_eq!(grade_short_answer("1.6 x 10^-19", &["1.6e-19"]), Verdict::Correct);
+        // And it still catches a genuinely wrong power.
+        assert_eq!(grade_short_answer("6.022 x 10^24", &["6.022e23"]), Verdict::Incorrect);
+    }
+
+    /// The suffix must not swallow a real unit that happens to start with x.
+    #[test]
+    fn a_trailing_unit_is_not_mistaken_for_an_exponent() {
+        let n = parse_numeric(&normalize("5 x 10 apples")).unwrap();
+        assert_eq!(n.value, 5.0);
+        assert!(!n.unit.is_empty());
+        let m = parse_numeric(&normalize("5 xenon")).unwrap();
+        assert_eq!(m.value, 5.0);
+        assert_eq!(m.unit, "xenon");
     }
 
     #[test]

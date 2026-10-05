@@ -345,3 +345,13 @@ export interface ImportTextResult {
   skipped_lines: number;
   sample: { front: string; back: string }[];
 }
+
+export type Verdict = "correct" | "incorrect" | "undecided";
+
+export interface CheckAnswerResult {
+  verdict: Verdict;
+  /** The stored answer, so an `undecided` result can be judged side by side. */
+  accepted: string;
+  /** Pre-selected grade; null for `undecided`, where guessing is the thing to avoid. */
+  suggested_rating: Rating | null;
+}

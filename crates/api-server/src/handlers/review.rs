@@ -111,3 +111,54 @@ pub async fn card_schedule(
         .map(Json)
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "this card has never been reviewed"))
 }
+
+#[derive(Debug, Deserialize)]
+pub struct CheckAnswerBody {
+    pub answer: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct CheckAnswerResponse {
+    /// "correct" | "incorrect" | "undecided"
+    pub verdict: String,
+    /// The stored answer, returned so an `undecided` result can be judged
+    /// side by side without a second request.
+    pub accepted: String,
+    /// What rating the UI should pre-select. `None` for `undecided`, where
+    /// guessing on the student's behalf is the whole thing to avoid.
+    pub suggested_rating: Option<String>,
+}
+
+/// Grades a typed answer with `crates/grading` — normalise, compare as numbers,
+/// allow a length-scaled typo budget — and **never calls the AI**.
+///
+/// The deliberate design is that only a genuinely ambiguous answer comes back
+/// `undecided`, and that case shows both answers for the student to judge
+/// rather than spending money to have a model confirm the obvious. A one-word
+/// mismatch is simply incorrect.
+pub async fn check_answer(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(card_id): Path<String>,
+    Json(body): Json<CheckAnswerBody>,
+) -> Result<Json<CheckAnswerResponse>, ApiError> {
+    let card = academic_core::repo::cards::get(&state.pool, &card_id)
+        .await?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("no card {card_id}")))?;
+
+    let verdict = match card.kind {
+        academic_core::models::CardKind::TrueFalse => grading::grade_true_false(&body.answer, &card.back),
+        academic_core::models::CardKind::MultipleChoice => grading::grade_choice(&body.answer, &card.back),
+        _ => grading::grade_short_answer(&body.answer, &[card.back.as_str()]),
+    };
+
+    Ok(Json(CheckAnswerResponse {
+        verdict: verdict.as_str().to_string(),
+        accepted: card.back,
+        suggested_rating: match verdict {
+            grading::Verdict::Correct => Some("good".to_string()),
+            grading::Verdict::Incorrect => Some("again".to_string()),
+            grading::Verdict::Undecided => None,
+        },
+    }))
+}

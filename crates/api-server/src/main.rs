@@ -139,6 +139,7 @@ async fn main() {
         // cross-course view is the point, not a per-deck convenience.
         .route("/review/queue", get(handlers::review::due_queue))
         .route("/cards/{id}/review", post(handlers::review::submit_review))
+        .route("/cards/{id}/check", post(handlers::review::check_answer))
         .route("/cards/{id}/suspend", post(handlers::review::set_suspended))
         .route("/cards/{id}/schedule", get(handlers::review::card_schedule))
         .route("/cards/{id}/history", get(handlers::review::card_history))

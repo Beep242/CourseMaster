@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import invoke from "../api";
-import type { Course, DueCard, Rating, ReviewOutcome } from "../types";
+import type { CheckAnswerResult, Course, DueCard, Rating, ReviewOutcome } from "../types";
 import { IconCheck, IconInbox, IconRefresh } from "../icons";
 
 /** The browser's own calendar date. See the API's `resolve_today`: the server
@@ -55,6 +55,13 @@ export function Review({ courseId, emptyHint }: Props) {
   const [leech, setLeech] = useState<DueCard | null>(null);
   const shownAt = useRef<number>(Date.now());
 
+  /** Flip through, or type the answer and have it checked. Typing is graded by
+   *  the deterministic matcher, so it costs nothing and answers instantly. */
+  const [mode, setMode] = useState<"flip" | "type">("flip");
+  const [typed, setTyped] = useState("");
+  const [checked, setChecked] = useState<CheckAnswerResult | null>(null);
+  const [checking, setChecking] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -67,6 +74,8 @@ export function Review({ courseId, emptyHint }: Props) {
       setCourses(c);
       setIndex(0);
       setFlipped(false);
+      setTyped("");
+      setChecked(null);
       shownAt.current = Date.now();
     } catch (e) {
       setError(String(e));
@@ -102,6 +111,8 @@ export function Review({ courseId, emptyHint }: Props) {
         if (rating === "again") setLapsed((l) => l + 1);
         if (outcome.is_leech) setLeech(card);
         setFlipped(false);
+        setTyped("");
+        setChecked(null);
         setIndex((i) => i + 1);
         shownAt.current = Date.now();
       } catch (e) {
@@ -112,6 +123,23 @@ export function Review({ courseId, emptyHint }: Props) {
     },
     [card, submitting],
   );
+
+  async function checkTyped() {
+    if (!card || !typed.trim() || checking) return;
+    setChecking(true);
+    setError(null);
+    try {
+      const result = await invoke<CheckAnswerResult>("check_answer", { id: card.id, answer: typed });
+      setChecked(result);
+      // Reveal regardless of verdict: seeing the real answer is the point of
+      // being wrong, and confirms it when right.
+      setFlipped(true);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setChecking(false);
+    }
+  }
 
   async function suspendLeech() {
     if (!leech) return;
@@ -126,6 +154,9 @@ export function Review({ courseId, emptyHint }: Props) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!card) return;
+      // While typing an answer, the keyboard belongs to the input — grabbing
+      // Space would make the field unusable.
+      if (mode === "type" && !checked) return;
       if (e.key === " " || e.key === "Enter") {
         e.preventDefault();
         setFlipped((f) => !f);
@@ -142,7 +173,7 @@ export function Review({ courseId, emptyHint }: Props) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [card, flipped, grade]);
+  }, [card, flipped, grade, mode, checked]);
 
   if (loading) return <p className="hint">Loading your queue…</p>;
 
@@ -212,6 +243,31 @@ export function Review({ courseId, emptyHint }: Props) {
         </span>
       </div>
 
+      <div className="tabs" style={{ width: "100%", maxWidth: 640 }}>
+        <button
+          type="button"
+          className={`tab-item ${mode === "flip" ? "active" : ""}`}
+          onClick={() => {
+            setMode("flip");
+            setChecked(null);
+            setTyped("");
+          }}
+        >
+          Flip
+        </button>
+        <button
+          type="button"
+          className={`tab-item ${mode === "type" ? "active" : ""}`}
+          onClick={() => {
+            setMode("type");
+            setFlipped(false);
+            setChecked(null);
+          }}
+        >
+          Type the answer
+        </button>
+      </div>
+
       <div className="row" style={{ justifyContent: "space-between", width: "100%", maxWidth: 640, fontSize: "0.82em" }}>
         <span className="hint" style={{ margin: 0 }}>
           {card.deck_name}
@@ -242,14 +298,28 @@ export function Review({ courseId, emptyHint }: Props) {
         </div>
       </button>
 
+      {checked && (
+        <div className="study-progress" style={{ justifyContent: "center" }}>
+          {checked.verdict === "correct" && <span className="badge badge-success">Correct</span>}
+          {checked.verdict === "incorrect" && <span className="badge badge-danger">Not quite</span>}
+          {checked.verdict === "undecided" && (
+            <span className="badge badge-warning">Close — you be the judge</span>
+          )}
+          <span className="hint" style={{ margin: 0 }}>
+            you wrote &ldquo;{typed}&rdquo;
+          </span>
+        </div>
+      )}
+
       {flipped ? (
         <div className="study-controls">
           {GRADES.map((g) => (
             <button
               key={g.rating}
               type="button"
-              className={g.className}
+              className={checked?.suggested_rating === g.rating ? "" : g.className}
               disabled={submitting}
+              style={checked?.suggested_rating === g.rating ? { outline: "2px solid var(--accent)" } : undefined}
               onClick={() => grade(g.rating)}
               title={`Press ${g.key}`}
             >
@@ -259,6 +329,27 @@ export function Review({ courseId, emptyHint }: Props) {
               </span>
             </button>
           ))}
+        </div>
+      ) : mode === "type" ? (
+        <div style={{ width: "100%", maxWidth: 640 }}>
+          <input
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                checkTyped();
+              }
+            }}
+            placeholder="Type your answer, then press Enter"
+            aria-label="Your answer"
+            autoFocus
+          />
+          <div className="row" style={{ justifyContent: "flex-end" }}>
+            <button type="button" disabled={checking || !typed.trim()} onClick={checkTyped}>
+              {checking ? "Checking…" : "Check"}
+            </button>
+          </div>
         </div>
       ) : (
         <div className="study-controls">
