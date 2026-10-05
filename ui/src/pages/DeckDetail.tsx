@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import invoke from "../api";
 import type { Card, CardUpdate, Course, Deck } from "../types";
-import { IconCards, IconCheck, IconInbox, IconPencil, IconPlus, IconX } from "../icons";
+import { IconCards, IconCheck, IconInbox, IconPencil, IconPlus, IconSparkle, IconX } from "../icons";
+import { CardReview } from "./CardReview";
 
 interface Props {
   deckId: string;
@@ -46,6 +47,7 @@ export function DeckDetail({ deckId, onBack, onStudy }: Props) {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [tab, setTab] = useState<"cards" | "generate">("cards");
 
   async function load() {
     setLoading(true);
@@ -187,6 +189,18 @@ export function DeckDetail({ deckId, onBack, onStudy }: Props) {
 
       {error && <div className="error-banner">{error}</div>}
 
+      <div className="tabs">
+        <button type="button" className={`tab-item ${tab === "cards" ? "active" : ""}`} onClick={() => setTab("cards")}>
+          Cards ({cards.length})
+        </button>
+        <button type="button" className={`tab-item ${tab === "generate" ? "active" : ""}`} onClick={() => setTab("generate")}>
+          <IconSparkle /> Generate from notes
+        </button>
+      </div>
+
+      {tab === "generate" && <CardReview deckId={deckId} deckName={deck.name} onCardsChanged={load} />}
+
+      {tab === "cards" && (
       <div className="row" style={{ justifyContent: "flex-end" }}>
         <button type="button" className="btn-secondary" disabled={cards.length === 0} onClick={onStudy}>
           <IconCards /> Study {cards.length > 0 ? `(${cards.length})` : ""}
@@ -195,8 +209,9 @@ export function DeckDetail({ deckId, onBack, onStudy }: Props) {
           <IconPlus /> New card
         </button>
       </div>
+      )}
 
-      {adding && (
+      {tab === "cards" && adding && (
         <div className="card">
           <h3>Add a card</h3>
           <div className="field-grid">
@@ -220,7 +235,7 @@ export function DeckDetail({ deckId, onBack, onStudy }: Props) {
         </div>
       )}
 
-      {cards.length === 0 ? (
+      {tab === "cards" && (cards.length === 0 ? (
         <div className="empty-state">
           <IconInbox width={32} height={32} />
           <p>No cards in this deck yet.</p>
@@ -295,7 +310,7 @@ export function DeckDetail({ deckId, onBack, onStudy }: Props) {
             </div>
           ),
         )
-      )}
+      ))}
     </div>
   );
 }

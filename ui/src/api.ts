@@ -76,6 +76,18 @@ function resolveRequest(cmd: string, args: Record<string, unknown>): Req {
       return { method: "PATCH", path: `/cards/${encodeURIComponent(String(args.id))}`, body: args.patch };
     case "delete_card":
       return { method: "DELETE", path: `/cards/${encodeURIComponent(String(args.id))}` };
+    case "generate_cards":
+      return { method: "POST", path: `/decks/${encodeURIComponent(String(args.deckId))}/imports`, body: args.input };
+    case "list_imports":
+      return { method: "GET", path: `/decks/${encodeURIComponent(String(args.deckId))}/imports` };
+    case "list_candidates":
+      return { method: "GET", path: `/imports/${encodeURIComponent(String(args.importId))}/candidates` };
+    case "approve_all_candidates":
+      return { method: "POST", path: `/imports/${encodeURIComponent(String(args.importId))}/approve-all` };
+    case "approve_candidate":
+      return { method: "POST", path: `/candidates/${encodeURIComponent(String(args.id))}/approve`, body: { edits: args.edits ?? null } };
+    case "reject_candidate":
+      return { method: "POST", path: `/candidates/${encodeURIComponent(String(args.id))}/reject` };
     case "search_cards":
       return { method: "GET", path: withQuery("/cards/search", { q: args.query, limit: args.limit }) };
     case "prioritized_today":

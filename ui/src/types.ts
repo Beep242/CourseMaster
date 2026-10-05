@@ -253,3 +253,47 @@ export interface CardSearchHit extends Card {
   deck_name: string;
   course_name: string | null;
 }
+
+export type ImportSourceKind = "paste" | "quizlet_paste" | "anki_csv" | "pdf" | "docx" | "pptx";
+export type ImportStatus = "generating" | "ready_for_review" | "failed" | "completed";
+
+/** One generation run. Created before the AI call, so a failure is visible. */
+export interface CardImport {
+  id: string;
+  deck_id: string;
+  source_kind: ImportSourceKind;
+  source_label: string | null;
+  source_text: string;
+  status: ImportStatus;
+  error_message: string | null;
+  /** What this generation cost, when the provider reported it. */
+  total_cost_usd: number | null;
+  pending_count: number;
+  approved_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A generated card awaiting review. Not a real card until approved. */
+export interface CardCandidate {
+  id: string;
+  import_id: string;
+  order_index: number;
+  kind: CardKind;
+  front: string;
+  back: string;
+  options: string[] | null;
+  explanation: string | null;
+  tags: string[];
+  source_excerpt: string | null;
+  review_status: ReviewStatus;
+  resulting_card_id: string | null;
+  created_at: string;
+}
+
+export interface CandidateEdits {
+  front?: string;
+  back?: string;
+  explanation?: string;
+  tags?: string[];
+}

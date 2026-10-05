@@ -1,5 +1,6 @@
 pub mod assignments;
 pub mod calendar_feeds;
+pub mod card_imports;
 pub mod cards;
 pub mod courses;
 pub mod decks;

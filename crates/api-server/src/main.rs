@@ -126,6 +126,14 @@ async fn main() {
             axum::routing::patch(handlers::decks::update_card).delete(handlers::decks::delete_card),
         )
         .route("/cards/search", get(handlers::decks::search_cards))
+        .route(
+            "/decks/{id}/imports",
+            get(handlers::decks::list_imports).post(handlers::decks::generate_cards),
+        )
+        .route("/imports/{id}/candidates", get(handlers::decks::list_candidates))
+        .route("/imports/{id}/approve-all", post(handlers::decks::approve_all))
+        .route("/candidates/{id}/approve", post(handlers::decks::approve_candidate))
+        .route("/candidates/{id}/reject", post(handlers::decks::reject_candidate))
         .route("/calendar-feeds", get(handlers::calendar::list_feeds).post(handlers::calendar::create_feed))
         .route("/calendar-feeds/{id}/sync", post(handlers::calendar::sync_feed))
         .route("/calendar-feeds/{id}/syllabi", get(handlers::calendar::list_feed_batches))

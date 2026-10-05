@@ -685,6 +685,59 @@ returned to the deck page.
 
 **130 rust tests pass; tsc clean.** No Rust changed.
 
+### ✅ Increment 9 — Migration 0006: import staging
+
+`card_imports` + `card_candidates`, shaped like `syllabus_extractions`: the
+established review-before-commit pattern. Candidates land as `pending`, and
+`approve_candidate` is the **only** path from a generated card to a `cards` row,
+exactly as `approve_extraction` is the only path from an extraction to an
+assignment.
+
+The import row is written *before* the AI call, so a generation that times out
+leaves a `failed` row carrying the reason rather than vanishing — and parsed
+candidates are durable immediately, so closing the tab mid-review does not throw
+away work that cost money. `source_text` is kept whole (not just per-card
+excerpts) so a later "explain this" can be grounded in the student's own notes.
+
+`resulting_card_id` is `ON DELETE SET NULL`, not CASCADE: deleting a card
+approved earlier must not erase the record that it was reviewed.
+
+**13 repo tests**, covering double-approve, approve-after-reject, an edit that
+blanks a card, `approve_all` skipping rejected ones and being a no-op on a second
+run, cost not being wiped by a later status change, and the SET NULL behaviour.
+
+### ✅ Increment 10 — MILESTONE: generate cards from pasted notes, with review
+
+`document-engine/src/card_generation.rs` + a **Generate from notes** tab on the
+deck page.
+
+Paste notes → Claude writes cards from *that material only* → every candidate is
+shown with the verbatim passage it came from → Add, Edit, or Discard, or Approve
+all. Nothing becomes a card without that step.
+
+- The schema **requires** `source_excerpt` on every card, so the review screen
+  can always show provenance rather than asking the student to trust a claim.
+- Parsing is defensive like `practice_test::parse_questions`: one malformed card
+  is dropped, the other eleven survive.
+- Count clamped to 40; cost recorded per import and shown in the UI.
+- Distractors are *not* generated here — they are generated when a card is first
+  studied as multiple choice (increment 18), so a plain flip-through never pays
+  for them.
+
+**Found and fixed a pre-existing bug:** `ApiError::from(DocumentError)` mapped
+*every* document error to 502, so "you sent no material" was reported as
+`502 Bad Gateway` — the server blaming itself for the caller's input. Now mapped
+per variant, delegating to the `CoreError` mapping so validation stays 400 and a
+missing row stays 404. This also affected the existing calendar and syllabus
+endpoints. Verified: empty material 400, missing deck 404, AI unavailable 502,
+missing candidate 404.
+
+Also verified locally that a failed generation records `status: failed` with the
+reason on the import row and leaks **no** cards into the deck. Real generation
+needs the live `claude` CLI, so it is verified against production after deploy.
+
+**150 rust tests pass; tsc clean.**
+
 ### Remaining
 
 Status line per increment as each lands, plus anything deferred. Next:

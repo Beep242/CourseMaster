@@ -428,3 +428,70 @@ pub struct CardSearchHit {
     pub deck_name: String,
     pub course_name: Option<String>,
 }
+
+string_enum!(ImportSourceKind {
+    Paste => "paste",
+    QuizletPaste => "quizlet_paste",
+    AnkiCsv => "anki_csv",
+    Pdf => "pdf",
+    Docx => "docx",
+    Pptx => "pptx",
+}, default = Paste);
+
+string_enum!(ImportStatus {
+    Generating => "generating",
+    ReadyForReview => "ready_for_review",
+    Failed => "failed",
+    Completed => "completed",
+}, default = Generating);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardImport {
+    pub id: Id,
+    pub deck_id: Id,
+    pub source_kind: ImportSourceKind,
+    pub source_label: Option<String>,
+    pub source_text: String,
+    pub status: ImportStatus,
+    pub error_message: Option<String>,
+    pub total_cost_usd: Option<f64>,
+    /// Counts below are computed per read, like `Deck::card_count`.
+    pub pending_count: i64,
+    pub approved_count: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// One generated card awaiting review. Mirrors `SyllabusExtraction`: nothing
+/// here is real until `approve_candidate` promotes it into a `cards` row.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardCandidate {
+    pub id: Id,
+    pub import_id: Id,
+    pub order_index: i64,
+    pub kind: CardKind,
+    pub front: String,
+    pub back: String,
+    pub options: Option<Vec<String>>,
+    pub explanation: Option<String>,
+    pub tags: Vec<String>,
+    pub source_excerpt: Option<String>,
+    pub review_status: ReviewStatus,
+    pub resulting_card_id: Option<Id>,
+    pub created_at: String,
+}
+
+/// Edits a reviewer applied before approving. Plain `Option` (absent = keep)
+/// rather than `Patch`, because a candidate is a throwaway staging row: the
+/// place to clear a field is the real card, after approval.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CandidateEdits {
+    #[serde(default)]
+    pub front: Option<String>,
+    #[serde(default)]
+    pub back: Option<String>,
+    #[serde(default)]
+    pub explanation: Option<String>,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
+}
