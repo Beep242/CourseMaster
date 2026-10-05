@@ -4,6 +4,7 @@ pub mod calendar;
 pub mod courses;
 pub mod decks;
 pub mod profile;
+pub mod review;
 pub mod scheduler;
 pub mod study;
 pub mod syllabus;

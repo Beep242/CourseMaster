@@ -90,6 +90,22 @@ function resolveRequest(cmd: string, args: Record<string, unknown>): Req {
       return { method: "POST", path: `/candidates/${encodeURIComponent(String(args.id))}/reject` };
     case "search_cards":
       return { method: "GET", path: withQuery("/cards/search", { q: args.query, limit: args.limit }) };
+    case "review_queue":
+      return {
+        method: "GET",
+        path: withQuery("/review/queue", {
+          course_id: args.courseId,
+          local_date: args.localDate,
+          new_per_day: args.newPerDay,
+          reviews_per_day: args.reviewsPerDay,
+        }),
+      };
+    case "submit_review":
+      return { method: "POST", path: `/cards/${encodeURIComponent(String(args.id))}/review`, body: args.input };
+    case "suspend_card":
+      return { method: "POST", path: `/cards/${encodeURIComponent(String(args.id))}/suspend`, body: { suspended: args.suspended, local_date: args.localDate } };
+    case "card_history":
+      return { method: "GET", path: `/cards/${encodeURIComponent(String(args.id))}/history` };
     case "prioritized_today":
       return { method: "GET", path: "/prioritized" };
     case "ai_status":

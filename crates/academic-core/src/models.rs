@@ -495,3 +495,67 @@ pub struct CandidateEdits {
     #[serde(default)]
     pub tags: Option<Vec<String>>,
 }
+
+/// A card's spaced-repetition state as stored. Mirrors `srs::CardState` field
+/// for field — the migration's columns were transcribed from it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardSchedule {
+    pub card_id: Id,
+    pub repetitions: i64,
+    pub interval_days: i64,
+    pub ease_factor: f64,
+    pub due_date: String,
+    pub lapses: i64,
+    pub suspended: bool,
+    pub updated_at: String,
+}
+
+/// A card plus its schedule and where it lives — what a review queue needs to
+/// show one card without the client fetching three things.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DueCard {
+    #[serde(flatten)]
+    pub card: Card,
+    pub deck_name: String,
+    pub course_name: Option<String>,
+    /// None when the card has never been reviewed.
+    pub schedule: Option<CardSchedule>,
+    pub is_new: bool,
+    /// What each grade button would do, in days, computed server-side from the
+    /// same `srs` code a review applies. Sent with the card so the UI can label
+    /// the buttons without reimplementing SM-2 in TypeScript — a second
+    /// implementation would be free to drift, and nothing would notice.
+    pub projections: IntervalProjections,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct IntervalProjections {
+    pub again: i64,
+    pub hard: i64,
+    pub good: i64,
+    pub easy: i64,
+}
+
+/// One graded answer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardReview {
+    pub id: Id,
+    pub card_id: Id,
+    pub rating: String,
+    pub local_date: String,
+    pub reviewed_at: String,
+    pub duration_ms: Option<i64>,
+    pub interval_before: i64,
+    pub interval_after: i64,
+    pub ease_after: f64,
+    pub was_lapse: bool,
+}
+
+/// What `record_review` gives back: the new schedule plus whether this answer
+/// tipped the card into leech territory, so the UI can offer to suspend it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewOutcome {
+    pub schedule: CardSchedule,
+    pub review_id: Id,
+    pub is_leech: bool,
+}

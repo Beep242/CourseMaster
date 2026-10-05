@@ -6,6 +6,7 @@ pub mod courses;
 pub mod decks;
 pub mod practice_tests;
 pub mod profile;
+pub mod reviews;
 pub mod semesters;
 pub mod study_guides;
 pub mod subtasks;

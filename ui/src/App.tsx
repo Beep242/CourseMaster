@@ -10,9 +10,10 @@ import { CourseDetail } from "./pages/CourseDetail";
 import { Decks } from "./pages/Decks";
 import { DeckDetail } from "./pages/DeckDetail";
 import { StudySession } from "./pages/StudySession";
+import { Review } from "./pages/Review";
 import { Imports } from "./pages/Imports";
 import { Settings } from "./pages/Settings";
-import { IconBook, IconCalendar, IconCards, IconGear, IconGrid, IconMoon, IconSun } from "./icons";
+import { IconBolt, IconBook, IconCalendar, IconCards, IconGear, IconGrid, IconMoon, IconSun } from "./icons";
 
 type Theme = "dark" | "light";
 const THEME_KEY = "coursemaster-theme";
@@ -27,6 +28,7 @@ type View =
   | { name: "dashboard" }
   | { name: "courses" }
   | { name: "course"; id: string }
+  | { name: "review" }
   | { name: "decks" }
   | { name: "deck"; id: string }
   | { name: "study"; deckId: string }
@@ -35,6 +37,7 @@ type View =
 
 const NAV = [
   { key: "dashboard" as const, label: "Dashboard", icon: IconGrid },
+  { key: "review" as const, label: "Review", icon: IconBolt },
   { key: "courses" as const, label: "Courses", icon: IconBook },
   { key: "decks" as const, label: "Decks", icon: IconCards },
   { key: "imports" as const, label: "Imports", icon: IconCalendar },
@@ -186,6 +189,7 @@ function App() {
           {view.name === "dashboard" && <Dashboard onOpenCourse={(id) => setView({ name: "course", id })} />}
           {view.name === "courses" && <Courses onOpenCourse={(id) => setView({ name: "course", id })} />}
           {view.name === "course" && <CourseDetail courseId={view.id} />}
+          {view.name === "review" && <Review emptyHint="Generate some cards from your notes, then they will show up here when they are due." />}
           {view.name === "decks" && <Decks onOpenDeck={(id) => setView({ name: "deck", id })} />}
           {view.name === "deck" && (
             <DeckDetail

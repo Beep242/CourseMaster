@@ -738,6 +738,57 @@ needs the live `claude` CLI, so it is verified against production after deploy.
 
 **150 rust tests pass; tsc clean.**
 
+### ✅ Increments 11–13 — Spaced repetition, on screen
+
+**11. Migration 0007** — `card_schedule` (one row per card, created on first
+review, not for every generated card) + `card_reviews` (one row per graded
+answer, normalized rather than a blob, because every later metric is a query
+over it).
+
+`record_review` does the read, the SM-2 computation and both writes **in one
+transaction**. A crash between them would leave a card whose history says it was
+answered and whose schedule says it was not, and every analytic built on the log
+would be wrong for that card forever. That is also why `academic-core` now
+depends on `srs`: computing in a caller would mean read → compute outside the
+transaction → write back, the exact interleaving this avoids.
+
+`local_date` comes from the **client**. The server runs in UTC, so an 11pm
+review in Eastern time is already tomorrow to it, and "due today" is a local-day
+concept.
+
+**12. Review API** — `GET /review/queue` spanning every deck and course, plus
+submit, suspend, schedule and history. Caps are per course and separate for new
+vs due: falling behind on reviews while still being shown new material is how a
+backlog becomes unrecoverable. The queue interleaves courses via
+`ROW_NUMBER() OVER (PARTITION BY course)` so a session covers the seven courses
+you actually have instead of forty cards of chemistry.
+
+**13. Review page** — a top-level **Review** nav item. Space reveals, **1–4**
+grade, each button labelled with what it would actually do. Those projections
+are computed **server-side** from the same `srs` code a review applies — a
+second implementation in TypeScript would be free to drift and nothing would
+notice. A card you keep failing offers to suspend itself, with the honest reason
+(the card is doing too much, not that you need to see it more often).
+
+**17 new tests** (167 total), including that the second review's `interval_before`
+equals the first's `interval_after` — only true if both writes really shared a
+transaction — plus suspended cards never appearing, suspension preserving a
+card's schedule, a review not silently un-suspending, the new-card cap bounding
+a 50-card deck, per-course interleaving, and a corrupt `due_date` not breaking
+the queue.
+
+**Verified in a browser against a local API**, two courses seeded: the queue
+showed 6 due across both, Space revealed the answer, `3` graded it, the card left
+the queue (6 → 5), the flip reset, and the next card came from the *other*
+course — interleaving visible in the real UI. Then matured a card to three
+reviews and confirmed the projections differentiate exactly as designed:
+**Again 1 · Hard 18 · Good 38 · Easy 52** on a 15-day card — 15×1.2 for Hard and
+15×2.65×1.3 for Easy, the two documented deviations from the 1987 paper working
+end to end. History recorded `0→1 → 1→6 → 6→15`.
+
+Note: on a brand-new card all four buttons read "1 day". That is correct SM-2 —
+the first successful interval is fixed regardless of grade — not a bug.
+
 ### Remaining
 
 Status line per increment as each lands, plus anything deferred. Next:

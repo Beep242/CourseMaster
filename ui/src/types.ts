@@ -297,3 +297,41 @@ export interface CandidateEdits {
   explanation?: string;
   tags?: string[];
 }
+
+export type Rating = "again" | "hard" | "good" | "easy";
+
+export interface CardSchedule {
+  card_id: string;
+  repetitions: number;
+  interval_days: number;
+  ease_factor: number;
+  due_date: string;
+  lapses: number;
+  suspended: boolean;
+  updated_at: string;
+}
+
+/** What each grade button would do, in days. Computed server-side from the
+ *  same SM-2 code a review applies, so the labels cannot drift from reality. */
+export interface IntervalProjections {
+  again: number;
+  hard: number;
+  good: number;
+  easy: number;
+}
+
+/** A due card plus where it lives and what each answer would do. */
+export interface DueCard extends Card {
+  deck_name: string;
+  course_name: string | null;
+  schedule: CardSchedule | null;
+  is_new: boolean;
+  projections: IntervalProjections;
+}
+
+export interface ReviewOutcome {
+  schedule: CardSchedule;
+  review_id: string;
+  /** This answer tipped the card past the lapse threshold. */
+  is_leech: boolean;
+}

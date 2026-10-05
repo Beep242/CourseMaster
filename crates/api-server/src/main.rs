@@ -134,6 +134,13 @@ async fn main() {
         .route("/imports/{id}/approve-all", post(handlers::decks::approve_all))
         .route("/candidates/{id}/approve", post(handlers::decks::approve_candidate))
         .route("/candidates/{id}/reject", post(handlers::decks::reject_candidate))
+        // Spaced repetition. The queue spans every deck and course — that
+        // cross-course view is the point, not a per-deck convenience.
+        .route("/review/queue", get(handlers::review::due_queue))
+        .route("/cards/{id}/review", post(handlers::review::submit_review))
+        .route("/cards/{id}/suspend", post(handlers::review::set_suspended))
+        .route("/cards/{id}/schedule", get(handlers::review::card_schedule))
+        .route("/cards/{id}/history", get(handlers::review::card_history))
         .route("/calendar-feeds", get(handlers::calendar::list_feeds).post(handlers::calendar::create_feed))
         .route("/calendar-feeds/{id}/sync", post(handlers::calendar::sync_feed))
         .route("/calendar-feeds/{id}/syllabi", get(handlers::calendar::list_feed_batches))

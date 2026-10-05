@@ -200,3 +200,12 @@ export function IconPencil(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+/** Lightning — the due-today review queue. */
+export function IconBolt(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <path d="M13 2 4.5 13.5H11l-1 8.5 8.5-11.5H12l1-8.5Z" />
+    </svg>
+  );
+}
