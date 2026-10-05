@@ -616,6 +616,41 @@ has no auth layer, so a handler that omits it is silently public.
 
 **130 rust tests pass** (24 in academic-core, up from 5); tsc clean.
 
+### ✅ Increment 7 — Deck and card UI
+
+A new top-level **Decks** nav item, plus two pages:
+
+- **`Decks.tsx`** — deck grid with card counts and course (or "unfiled"), create
+  form with course + colour, delete with a confirm naming the card count, and
+  **cross-library search** showing each hit's deck and course.
+- **`DeckDetail.tsx`** — card list, add card, inline edit (front, back,
+  explanation, tags as a comma string), delete, and a course picker that files
+  or unfiles the deck.
+- Three icons added (`IconCards`, `IconSearch`, `IconPencil`) in the existing
+  hand-rolled style; still zero npm dependencies.
+
+Blanking the explanation field sends an explicit `null`, which is precisely the
+`Patch` case increment 6 built — the UI can *remove* a bad generated
+explanation, not merely overwrite it.
+
+**Driven in a real browser against a local API**, not just typechecked. Since
+the signed-in shell needs a PortFolio session, I built the UI pointed at a local
+throwaway server, minted a test token against a test secret, and injected it —
+`ensureBridgeSession` reads a cached session from localStorage, so no real
+credential was involved. Then clicked through the actual flow: created a deck
+(filed under a seeded course), opened it, added a card, edited it to add an
+explanation and tags (parsed from `"acids, definitions"` into two badges),
+re-edited to blank the explanation — confirmed `explanation: null` with tags and
+front untouched — and searched, getting "1 match" with the deck and course badge.
+Also confirmed the nav active state: on the Decks page, `Decks` is the only
+`.side-item.active`.
+
+Afterwards the server was stopped, the test database deleted, and `ui/dist`
+rebuilt so it no longer points at `localhost:18080`.
+
+**130 rust tests pass; tsc clean.** No Rust changed in this increment — it is UI
+against the API increment 6 already proved.
+
 ### Remaining
 
 Status line per increment as each lands, plus anything deferred.

@@ -170,3 +170,33 @@ export function IconInbox(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+/** Stacked cards — the Decks nav item. */
+export function IconCards(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <rect x="3" y="7" width="13" height="14" rx="2" />
+      <path d="M7.5 4h11a2 2 0 0 1 2 2v11" />
+    </svg>
+  );
+}
+
+/** Magnifier — cross-library card search. */
+export function IconSearch(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.6-3.6" />
+    </svg>
+  );
+}
+
+/** Pencil — edit a card in place. */
+export function IconPencil(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
