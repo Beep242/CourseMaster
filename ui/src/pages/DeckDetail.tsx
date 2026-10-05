@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import invoke from "../api";
 import type { Card, CardUpdate, Course, Deck } from "../types";
-import { IconCheck, IconInbox, IconPencil, IconPlus, IconX } from "../icons";
+import { IconCards, IconCheck, IconInbox, IconPencil, IconPlus, IconX } from "../icons";
 
 interface Props {
   deckId: string;
   onBack: () => void;
+  onStudy: () => void;
 }
 
 interface Draft {
@@ -31,7 +32,7 @@ function parseTags(raw: string): string[] {
     .filter(Boolean);
 }
 
-export function DeckDetail({ deckId, onBack }: Props) {
+export function DeckDetail({ deckId, onBack, onStudy }: Props) {
   const [deck, setDeck] = useState<Deck | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -187,6 +188,9 @@ export function DeckDetail({ deckId, onBack }: Props) {
       {error && <div className="error-banner">{error}</div>}
 
       <div className="row" style={{ justifyContent: "flex-end" }}>
+        <button type="button" className="btn-secondary" disabled={cards.length === 0} onClick={onStudy}>
+          <IconCards /> Study {cards.length > 0 ? `(${cards.length})` : ""}
+        </button>
         <button type="button" onClick={() => setAdding((v) => !v)}>
           <IconPlus /> New card
         </button>

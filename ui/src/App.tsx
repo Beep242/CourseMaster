@@ -9,6 +9,7 @@ import { Courses } from "./pages/Courses";
 import { CourseDetail } from "./pages/CourseDetail";
 import { Decks } from "./pages/Decks";
 import { DeckDetail } from "./pages/DeckDetail";
+import { StudySession } from "./pages/StudySession";
 import { Imports } from "./pages/Imports";
 import { Settings } from "./pages/Settings";
 import { IconBook, IconCalendar, IconCards, IconGear, IconGrid, IconMoon, IconSun } from "./icons";
@@ -28,6 +29,7 @@ type View =
   | { name: "course"; id: string }
   | { name: "decks" }
   | { name: "deck"; id: string }
+  | { name: "study"; deckId: string }
   | { name: "imports" }
   | { name: "settings" };
 
@@ -114,7 +116,13 @@ function App() {
   }
 
   const title =
-    view.name === "course" ? "Course" : view.name === "deck" ? "Deck" : (NAV.find((n) => n.key === view.name)?.label ?? "CourseMaster");
+    view.name === "course"
+      ? "Course"
+      : view.name === "deck"
+        ? "Deck"
+        : view.name === "study"
+          ? "Study"
+          : (NAV.find((n) => n.key === view.name)?.label ?? "CourseMaster");
 
   return (
     <div className="shell">
@@ -137,7 +145,8 @@ function App() {
               className={`side-item ${
                 view.name === key ||
                 (view.name === "course" && key === "courses") ||
-                (view.name === "deck" && key === "decks")
+                (view.name === "deck" && key === "decks") ||
+                (view.name === "study" && key === "decks")
                   ? "active"
                   : ""
               }`}
@@ -178,7 +187,16 @@ function App() {
           {view.name === "courses" && <Courses onOpenCourse={(id) => setView({ name: "course", id })} />}
           {view.name === "course" && <CourseDetail courseId={view.id} />}
           {view.name === "decks" && <Decks onOpenDeck={(id) => setView({ name: "deck", id })} />}
-          {view.name === "deck" && <DeckDetail deckId={view.id} onBack={() => setView({ name: "decks" })} />}
+          {view.name === "deck" && (
+            <DeckDetail
+              deckId={view.id}
+              onBack={() => setView({ name: "decks" })}
+              onStudy={() => setView({ name: "study", deckId: view.id })}
+            />
+          )}
+          {view.name === "study" && (
+            <StudySession deckId={view.deckId} onExit={() => setView({ name: "deck", id: view.deckId })} />
+          )}
           {view.name === "imports" && <Imports />}
           {view.name === "settings" && <Settings />}
         </main>

@@ -651,9 +651,44 @@ rebuilt so it no longer points at `localhost:18080`.
 **130 rust tests pass; tsc clean.** No Rust changed in this increment — it is UI
 against the API increment 6 already proved.
 
+### ✅ Increment 8 — MILESTONE: flip-card study session
+
+**You can now actually study.** `StudySession.tsx`: one card at a time, a 3D
+flip to reveal the answer, and a read-through of the deck.
+
+- Click or **Space** flips; **← →** move; **Esc** exits; swipe works on a phone
+  (48px threshold, below which a swipe is indistinguishable from a tap that
+  moved — stealing those would make the card unflippable on touch).
+- Progress bar, `n / total`, and a "seen" count that takes the high-water mark
+  so going back and forth doesn't inflate it.
+- Moving to a new card resets the flip, so you never land on an answer.
+- At the end, Next becomes **Shuffle and restart** (Fisher-Yates on a copy).
+- The explanation shows on the answer face when a card has one.
+- Entry point is a **Study (n)** button on the deck page, disabled at zero cards.
+
+No scheduling in it, deliberately — "study this deck tonight" needs cards and a
+way to move through them, which is exactly why this lands before spaced
+repetition rather than behind it. Increments 12–13 add grading on top of this
+screen.
+
+The flip is a transform on an inner wrapper with `backface-visibility: hidden`
+on both faces; the `prefers-reduced-motion` guard from increment 5 collapses the
+duration, so with motion reduced the flip still *works*, it just happens
+instantly.
+
+**Verified by driving it in a browser** against a local throwaway API seeded
+with a 3-card deck: Space set `flipped` and the transform was caught
+mid-rotation; → advanced to card 2 with the flip reset and "2 seen"; at 3/3 the
+progress bar read 100% and the button had become "Shuffle and restart"; going
+back twice returned to 1/3 with "seen" still 3 and Previous disabled; Esc
+returned to the deck page.
+
+**130 rust tests pass; tsc clean.** No Rust changed.
+
 ### Remaining
 
-Status line per increment as each lands, plus anything deferred.
+Status line per increment as each lands, plus anything deferred. Next:
+9 (import staging tables) and **10 — paste notes, generate cards, review them**.
 
 **Prerequisite, already done (not part of the 24):** the three D2L calendar-crawler defects — UTC read
 as a local date, one item becoming three via D2L's `Available`/`Availability Ends`/`Due` state events,
