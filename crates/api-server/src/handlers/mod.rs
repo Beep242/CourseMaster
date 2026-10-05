@@ -9,3 +9,4 @@ pub mod review;
 pub mod scheduler;
 pub mod study;
 pub mod syllabus;
+pub mod today;

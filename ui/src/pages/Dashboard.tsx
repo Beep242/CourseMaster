@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import invoke from "../api";
-import type { Course, PrioritizedItem } from "../types";
-import { IconClock, IconInbox } from "../icons";
+import type { Course, PrioritizedItem, TodaySummary } from "../types";
+import { IconBolt, IconClock, IconInbox } from "../icons";
 
 interface Props {
   onOpenCourse: (id: string) => void;
+  onStartReview: () => void;
 }
 
-export function Dashboard({ onOpenCourse }: Props) {
+export function Dashboard({ onOpenCourse, onStartReview }: Props) {
   const [items, setItems] = useState<PrioritizedItem[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [today, setToday] = useState<TodaySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,12 +19,17 @@ export function Dashboard({ onOpenCourse }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const [p, c] = await Promise.all([
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const localDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      const [p, c, t] = await Promise.all([
         invoke<PrioritizedItem[]>("prioritized_today"),
         invoke<Course[]>("list_courses", { semesterId: null }),
+        invoke<TodaySummary>("today", { localDate }),
       ]);
       setItems(p);
       setCourses(c);
+      setToday(t);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -41,6 +48,36 @@ export function Dashboard({ onOpenCourse }: Props) {
     <div>
       <p className="hint">What should I do right now?</p>
       {error && <div className="error-banner">{error}</div>}
+
+      {today?.nudge && (
+        <div className="card">
+          <div className="row" style={{ justifyContent: "space-between", margin: 0 }}>
+            <span>{today.nudge}</span>
+            {today.due_count + today.new_count > 0 && (
+              <button type="button" className="btn-secondary" onClick={onStartReview}>
+                <IconBolt /> Review {today.due_count + today.new_count}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {today && today.exams.length > 0 && (
+        <div className="card">
+          <h3>Coming up</h3>
+          {today.exams.slice(0, 5).map((e) => (
+            <div key={e.assignment_id} className="row" style={{ justifyContent: "space-between", margin: "0.35rem 0" }}>
+              <span>
+                <span className={`kind-pill kind-${e.kind}`}>{e.kind}</span> {e.title}
+                {e.course_name ? <span className="hint"> · {e.course_name}</span> : null}
+              </span>
+              <span className={e.days_away <= 3 ? "badge badge-danger" : "badge badge-neutral"}>
+                {e.days_away === 0 ? "today" : e.days_away === 1 ? "tomorrow" : `${e.days_away} days`}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="stat-row">
         <div className="stat">

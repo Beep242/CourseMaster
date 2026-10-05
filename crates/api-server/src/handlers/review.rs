@@ -48,7 +48,69 @@ pub async fn due_queue(
         reviews_per_day: query.reviews_per_day.unwrap_or(DEFAULT_REVIEWS_PER_DAY).clamp(0, 2000),
         course_id: query.course_id.filter(|c| !c.is_empty()),
     };
-    Ok(Json(reviews::due_queue(&state.pool, today, limits).await?))
+    let mut queue = reviews::due_queue(&state.pool, today, limits).await?;
+    apply_exam_bias(&state.pool, today, &mut queue).await?;
+    Ok(Json(queue))
+}
+
+/// Brings cards from a course with an approaching exam to the front.
+///
+/// Deliberately a **reordering**, not a rescheduling: nothing here touches
+/// `card_schedule`. Pulling SRS due dates forward to cram would corrupt the
+/// spacing data permanently, and the student would still be paying for it in
+/// November. A session that *shows* chemistry first costs nothing and is undone
+/// the moment the exam passes.
+///
+/// Courses with no exam inside the horizon keep their existing interleaved
+/// order, since `sort_by_key` is stable.
+async fn apply_exam_bias(
+    pool: &academic_core::SqlitePool,
+    today: chrono::NaiveDate,
+    queue: &mut [academic_core::models::DueCard],
+) -> Result<(), ApiError> {
+    use std::collections::HashMap;
+
+    const EXAM_HORIZON_DAYS: i64 = 14;
+
+    let courses = academic_core::repo::courses::list_all(pool).await?;
+    let mut soonest: HashMap<String, i64> = HashMap::new();
+    for assignment in academic_core::repo::assignments::list_all(pool).await? {
+        if !matches!(
+            assignment.kind,
+            academic_core::models::AssignmentKind::Exam | academic_core::models::AssignmentKind::Quiz
+        ) {
+            continue;
+        }
+        let Some(due) = assignment.due_date.as_deref().and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
+        else {
+            continue;
+        };
+        let days = (due - today).num_days();
+        if (0..=EXAM_HORIZON_DAYS).contains(&days) {
+            soonest
+                .entry(assignment.course_id)
+                .and_modify(|existing| *existing = (*existing).min(days))
+                .or_insert(days);
+        }
+    }
+    if soonest.is_empty() {
+        return Ok(());
+    }
+
+    // Course name is what the queue carries, so map names back to ids once.
+    let days_by_name: HashMap<&str, i64> = courses
+        .iter()
+        .filter_map(|c| soonest.get(&c.id).map(|d| (c.name.as_str(), *d)))
+        .collect();
+
+    queue.sort_by_key(|card| {
+        card.course_name
+            .as_deref()
+            .and_then(|name| days_by_name.get(name).copied())
+            // No imminent exam sorts after every course that has one.
+            .unwrap_or(i64::MAX)
+    });
+    Ok(())
 }
 
 #[derive(Debug, Deserialize)]

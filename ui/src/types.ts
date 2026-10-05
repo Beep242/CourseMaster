@@ -404,3 +404,23 @@ export interface DeckMastery {
   /** Mature cards over *total* cards — coverage, not accuracy. */
   mastery: number;
 }
+
+export interface ExamCountdown {
+  assignment_id: string;
+  title: string;
+  course_id: string;
+  course_name: string | null;
+  kind: string;
+  due_date: string;
+  days_away: number;
+}
+
+export interface TodaySummary {
+  due_count: number;
+  new_count: number;
+  reviews_today: number;
+  studied_today: boolean;
+  exams: ExamCountdown[];
+  /** One sentence for the dashboard, or null when there is nothing to say. */
+  nudge: string | null;
+}

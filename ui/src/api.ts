@@ -94,6 +94,8 @@ function resolveRequest(cmd: string, args: Record<string, unknown>): Req {
       return { method: "POST", path: `/candidates/${encodeURIComponent(String(args.id))}/reject` };
     case "search_cards":
       return { method: "GET", path: withQuery("/cards/search", { q: args.query, limit: args.limit }) };
+    case "today":
+      return { method: "GET", path: withQuery("/today", { local_date: args.localDate }) };
     case "progress":
       return { method: "GET", path: withQuery("/progress", { course_id: args.courseId, days: args.days, limit: args.limit, local_date: args.localDate }) };
     case "review_queue":

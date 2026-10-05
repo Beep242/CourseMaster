@@ -189,7 +189,12 @@ function App() {
         </header>
 
         <main className="app-main">
-          {view.name === "dashboard" && <Dashboard onOpenCourse={(id) => setView({ name: "course", id })} />}
+          {view.name === "dashboard" && (
+            <Dashboard
+              onOpenCourse={(id) => setView({ name: "course", id })}
+              onStartReview={() => setView({ name: "review" })}
+            />
+          )}
           {view.name === "courses" && <Courses onOpenCourse={(id) => setView({ name: "course", id })} />}
           {view.name === "course" && <CourseDetail courseId={view.id} />}
           {view.name === "review" && <Review emptyHint="Generate some cards from your notes, then they will show up here when they are due." />}
