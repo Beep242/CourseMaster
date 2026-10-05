@@ -1,3 +1,4 @@
+pub mod analytics;
 pub mod assignments;
 pub mod calendar_feeds;
 pub mod card_imports;

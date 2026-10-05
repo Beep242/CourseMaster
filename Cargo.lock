@@ -89,6 +89,7 @@ dependencies = [
  "axum",
  "chrono",
  "document-engine",
+ "examready",
  "grading",
  "jsonwebtoken",
  "scheduler",
@@ -1034,6 +1035,13 @@ checksum = "5a23add41df1562121a9393cb065eab5146a1242410f23a644851e90cfd669d2"
 dependencies = [
  "parking",
  "pin-project-lite",
+]
+
+[[package]]
+name = "examready"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

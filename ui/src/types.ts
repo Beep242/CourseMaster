@@ -365,3 +365,42 @@ export interface CardExplanation {
   total_cost_usd: number | null;
   created_at: string;
 }
+
+export interface WeakCard {
+  card_id: string;
+  front: string;
+  deck_name: string;
+  course_name: string | null;
+  total_reviews: number;
+  lapses: number;
+  accuracy: number;
+  interval_days: number;
+}
+
+export interface DayAccuracy {
+  /** The student's local calendar date, not the server's. */
+  day: string;
+  total: number;
+  correct: number;
+  accuracy: number;
+  duration_ms: number;
+}
+
+export interface StudyTotals {
+  reviews: number;
+  correct: number;
+  accuracy: number;
+  days_studied: number;
+  duration_ms: number;
+}
+
+export interface DeckMastery {
+  deck_id: string;
+  deck_name: string;
+  course_name: string | null;
+  total_cards: number;
+  seen_cards: number;
+  mature_cards: number;
+  /** Mature cards over *total* cards — coverage, not accuracy. */
+  mastery: number;
+}

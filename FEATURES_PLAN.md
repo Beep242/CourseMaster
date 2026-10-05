@@ -896,6 +896,40 @@ once. Not answering at all is cached separately and asks a different question �
 Writes use `ON CONFLICT DO UPDATE` so two requests racing on the same mistake
 both succeed instead of one failing.
 
+### ✅ Increments 21–22 — Analytics and an explainable exam-ready score
+
+A **Progress** nav item, backed by one request rather than four round trips from
+a phone.
+
+**21 — analytics** (`repo/analytics.rs`): weak cards, per-day accuracy, study
+totals, per-deck mastery. All queries over the normalized review log from
+increment 11 — none of them expressible against a JSON blob. Grouped on
+`local_date`, so a late-night session counts toward the day you experienced.
+
+Weak cards rank by **lapses then accuracy**, not accuracy alone: a card failed 4
+times in 20 is a worse problem than one failed once in one, and raw accuracy
+would put the second on top. Mastery is counted over a deck's *cards*, not over
+what has been reviewed — a 200-card deck with 3 reviewed reads 1.5%, not 100%,
+because coverage is what predicts an exam.
+
+**22 — `crates/examready`**: a fourth pure crate. Coverage 0.45 / retention 0.35
+/ accuracy 0.20, every weight a named constant, returning the **reason**
+alongside the score and naming the component actually holding it back —
+*"held back by coverage: 80 of 100 cards never seen. Exam in 5 days."* A score
+nobody can interrogate is a vibe with a percent sign.
+
+Two deliberate behaviours: accuracy is **damped below 10 reviews**, so one lucky
+answer is not 100% and one slip is not 0%; and an imminent exam can only
+*temper* a thin score, never raise one — there is no time left to fix coverage
+by Thursday.
+
+The sparkline is inline SVG, so the frontend still has exactly two npm
+dependencies. Bar height is accuracy, bar opacity is volume, so a 100% day built
+on two cards doesn't look like one built on forty.
+
+**17 new tests.** The adversarial sweep over `i64::MIN`/`i64::MAX` caught a real
+**subtraction overflow** building the reason string — now saturating.
+
 ### Remaining
 
 Status line per increment as each lands, plus anything deferred. Next:

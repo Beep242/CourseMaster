@@ -8,6 +8,7 @@ members = [
     "crates/scheduler",
     "crates/srs",
     "crates/grading",
+    "crates/examready",
     "desktop/src-tauri",
 ]
 
@@ -37,6 +38,7 @@ document-engine = { path = "crates/document-engine" }
 scheduler = { path = "crates/scheduler" }
 srs = { path = "crates/srs" }
 grading = { path = "crates/grading" }
+examready = { path = "crates/examready" }
 
 [profile.release]
 panic = "abort"

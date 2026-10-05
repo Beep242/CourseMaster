@@ -573,3 +573,46 @@ pub struct CardExplanation {
     pub total_cost_usd: Option<f64>,
     pub created_at: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WeakCard {
+    pub card_id: Id,
+    pub front: String,
+    pub deck_name: String,
+    pub course_name: Option<String>,
+    pub total_reviews: i64,
+    pub lapses: i64,
+    pub accuracy: f64,
+    pub interval_days: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DayAccuracy {
+    /// The student's local calendar date, not the server's.
+    pub day: String,
+    pub total: i64,
+    pub correct: i64,
+    pub accuracy: f64,
+    pub duration_ms: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StudyTotals {
+    pub reviews: i64,
+    pub correct: i64,
+    pub accuracy: f64,
+    pub days_studied: i64,
+    pub duration_ms: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeckMastery {
+    pub deck_id: Id,
+    pub deck_name: String,
+    pub course_name: Option<String>,
+    pub total_cards: i64,
+    pub seen_cards: i64,
+    pub mature_cards: i64,
+    /// Mature cards over *total* cards — coverage, not accuracy.
+    pub mastery: f64,
+}
