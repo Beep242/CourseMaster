@@ -877,6 +877,25 @@ showing stored order would give it away.
 first correct answer appeared last), picking a wrong one showed "Not quite",
 revealed the card, and outlined **Again**.
 
+### ✅ Increment 19 — "Explain why", cached per mistake
+
+An **Explain why** button appears in the review session after a wrong answer.
+The explanation is grounded in the card's own `source_excerpt` — the passage the
+card was generated from — not in the model's general knowledge. That is what
+increment 10 requires a source excerpt on every card *for*: an explanation that
+quietly contradicts your lecture notes is worse than none, because you are
+examined on the notes. There is no vector store and none is needed; the relevant
+passage was captured when the card was made, so "retrieval" is a column read.
+
+**Migration 0008** caches explanations keyed on the card plus the *normalised*
+mistake, using the same `grading::normalize` that decided the answer was wrong.
+So "Nucleus!" and "nucleus" are one misunderstanding, explained and paid for
+once. Not answering at all is cached separately and asks a different question —
+"why is your answer wrong" reads badly when there was no answer.
+
+Writes use `ON CONFLICT DO UPDATE` so two requests racing on the same mistake
+both succeed instead of one failing.
+
 ### Remaining
 
 Status line per increment as each lands, plus anything deferred. Next:

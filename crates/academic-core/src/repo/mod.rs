@@ -4,6 +4,7 @@ pub mod card_imports;
 pub mod cards;
 pub mod courses;
 pub mod decks;
+pub mod explanations;
 pub mod practice_tests;
 pub mod profile;
 pub mod reviews;

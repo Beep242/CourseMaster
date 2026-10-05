@@ -559,3 +559,17 @@ pub struct ReviewOutcome {
     pub review_id: Id,
     pub is_leech: bool,
 }
+
+/// A cached explanation of one specific wrong answer. See migration 0008: the
+/// key is the *normalised* mistake, so the same misunderstanding is explained
+/// (and paid for) once.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardExplanation {
+    pub id: Id,
+    pub card_id: Id,
+    pub mistake_key: String,
+    pub submitted: String,
+    pub explanation: String,
+    pub total_cost_usd: Option<f64>,
+    pub created_at: String,
+}

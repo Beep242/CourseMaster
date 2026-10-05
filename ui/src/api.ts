@@ -106,6 +106,8 @@ function resolveRequest(cmd: string, args: Record<string, unknown>): Req {
       };
     case "check_answer":
       return { method: "POST", path: `/cards/${encodeURIComponent(String(args.id))}/check`, body: { answer: args.answer } };
+    case "explain_mistake":
+      return { method: "POST", path: `/cards/${encodeURIComponent(String(args.id))}/explain`, body: { answer: args.answer ?? "" } };
     case "submit_review":
       return { method: "POST", path: `/cards/${encodeURIComponent(String(args.id))}/review`, body: args.input };
     case "suspend_card":

@@ -141,6 +141,7 @@ async fn main() {
         .route("/review/queue", get(handlers::review::due_queue))
         .route("/cards/{id}/review", post(handlers::review::submit_review))
         .route("/cards/{id}/check", post(handlers::review::check_answer))
+        .route("/cards/{id}/explain", post(handlers::review::explain))
         .route("/cards/{id}/suspend", post(handlers::review::set_suspended))
         .route("/cards/{id}/schedule", get(handlers::review::card_schedule))
         .route("/cards/{id}/history", get(handlers::review::card_history))

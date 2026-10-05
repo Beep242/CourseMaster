@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import invoke from "../api";
-import type { CheckAnswerResult, Course, DueCard, Rating, ReviewOutcome } from "../types";
-import { IconCheck, IconInbox, IconRefresh } from "../icons";
+import type { CardExplanation, CheckAnswerResult, Course, DueCard, Rating, ReviewOutcome } from "../types";
+import { IconCheck, IconInbox, IconRefresh, IconSparkle } from "../icons";
 
 /** The browser's own calendar date. See the API's `resolve_today`: the server
  *  runs in UTC, so an 11pm review in Eastern time is already tomorrow to it,
@@ -82,6 +82,8 @@ export function Review({ courseId, emptyHint }: Props) {
   const [typed, setTyped] = useState("");
   const [checked, setChecked] = useState<CheckAnswerResult | null>(null);
   const [checking, setChecking] = useState(false);
+  const [explanation, setExplanation] = useState<CardExplanation | null>(null);
+  const [explaining, setExplaining] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,6 +100,7 @@ export function Review({ courseId, emptyHint }: Props) {
       setTyped("");
       setChecked(null);
       setPicked(null);
+      setExplanation(null);
       shownAt.current = Date.now();
     } catch (e) {
       setError(String(e));
@@ -136,6 +139,7 @@ export function Review({ courseId, emptyHint }: Props) {
         setTyped("");
         setChecked(null);
         setPicked(null);
+        setExplanation(null);
         setIndex((i) => i + 1);
         shownAt.current = Date.now();
       } catch (e) {
@@ -161,6 +165,21 @@ export function Review({ courseId, emptyHint }: Props) {
       setError(String(e));
     } finally {
       setChecking(false);
+    }
+  }
+
+  async function explainMistake() {
+    if (!card || explaining) return;
+    setExplaining(true);
+    setError(null);
+    try {
+      // The answer is sent so the explanation can address the actual mistake;
+      // it is also the cache key, so asking twice about the same slip is free.
+      setExplanation(await invoke<CardExplanation>("explain_mistake", { id: card.id, answer: typed || picked || "" }));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setExplaining(false);
     }
   }
 
@@ -376,6 +395,27 @@ export function Review({ courseId, emptyHint }: Props) {
           <span className="hint" style={{ margin: 0 }}>
             you wrote &ldquo;{typed}&rdquo;
           </span>
+        </div>
+      )}
+
+      {flipped && checked?.verdict !== "correct" && (
+        <div style={{ width: "100%", maxWidth: 640 }}>
+          {explanation ? (
+            <div className="card">
+              <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{explanation.explanation}</p>
+              {card.source_excerpt && (
+                <p className="extraction-excerpt" title="From your own material">
+                  &ldquo;{card.source_excerpt}&rdquo;
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="row" style={{ justifyContent: "center" }}>
+              <button type="button" className="btn-ghost" disabled={explaining} onClick={explainMistake}>
+                <IconSparkle /> {explaining ? "Thinking…" : "Explain why"}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

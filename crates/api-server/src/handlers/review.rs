@@ -162,3 +162,24 @@ pub async fn check_answer(
         },
     }))
 }
+
+#[derive(Debug, Deserialize)]
+pub struct ExplainBody {
+    /// What the student wrote. Empty is meaningful — "I didn't know" is a
+    /// distinct thing to explain.
+    #[serde(default)]
+    pub answer: String,
+}
+
+/// Explains a wrong answer, grounded in the card's own source material.
+///
+/// Cached per normalised mistake, so getting a card wrong the same way twice
+/// costs nothing the second time.
+pub async fn explain(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(card_id): Path<String>,
+    Json(body): Json<ExplainBody>,
+) -> Result<Json<academic_core::models::CardExplanation>, ApiError> {
+    Ok(Json(document_engine::explain_mistake(&state.pool, state.ai.as_ref(), &card_id, &body.answer).await?))
+}

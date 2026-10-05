@@ -355,3 +355,13 @@ export interface CheckAnswerResult {
   /** Pre-selected grade; null for `undecided`, where guessing is the thing to avoid. */
   suggested_rating: Rating | null;
 }
+
+export interface CardExplanation {
+  id: string;
+  card_id: string;
+  mistake_key: string;
+  submitted: string;
+  explanation: string;
+  total_cost_usd: number | null;
+  created_at: string;
+}
