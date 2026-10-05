@@ -17,6 +17,7 @@
 #   CM_DB_PATH           db path inside the container    (default /app/data/coursemaster.db)
 #   CM_BACKUP_DIR        snapshot dir on the VPS         (default /opt/coursemaster/backups)
 #   CM_LOCAL_BACKUP_DIR  snapshot dir on this machine    (default ./backups)
+#   CM_HELPER_IMAGE      image providing sqlite3         (default alpine:latest)
 
 set -euo pipefail
 
@@ -25,62 +26,70 @@ CONTAINER="${CM_CONTAINER:-coursemaster-api-1}"
 DB_PATH="${CM_DB_PATH:-/app/data/coursemaster.db}"
 BACKUP_DIR="${CM_BACKUP_DIR:-/opt/coursemaster/backups}"
 LOCAL_BACKUP_DIR="${CM_LOCAL_BACKUP_DIR:-./backups}"
+HELPER_IMAGE="${CM_HELPER_IMAGE:-alpine:latest}"
 
 STAMP="$(date -u +%Y%m%d-%H%M%S)"
 NAME="coursemaster-${STAMP}.db"
-# Staged inside the container's data volume, because `docker cp` can only read
-# paths the container can see.
-STAGED="$(dirname "$DB_PATH")/.backup-${STAMP}.db"
 
 echo "==> Snapshotting ${CONTAINER}:${DB_PATH}"
 
 # `sqlite3 .backup` is the only correct way to copy a live SQLite database: a
-# plain `cp` of the file races with in-flight writes, and once WAL is enabled it
-# would also silently miss the -wal sidecar. sqlite3 is not in the runtime image
-# (the Dockerfile installs only Node and the Claude CLI) and an `apt-get install`
-# does not survive a container recreate, so it is installed on demand each run.
-ssh "$SSH_TARGET" bash -s -- "$CONTAINER" "$DB_PATH" "$STAGED" "$BACKUP_DIR" "$NAME" <<'REMOTE'
+# plain `cp` races with in-flight writes and, with WAL enabled, would also miss
+# the `-wal` sidecar holding the most recent commits.
+#
+# It runs in a THROWAWAY ALPINE CONTAINER mounting the same data directory,
+# rather than installing sqlite3 into the app container. The app image ships no
+# sqlite3, an install there does not survive a container recreate, and — the
+# reason this changed — apt inside that image now fails outright with
+# "At least one invalid signature was encountered" on the Debian security and
+# nodesource repos, so the install cannot succeed at all. `.backup` from a
+# separate process is safe: it uses SQLite's online backup API and takes a read
+# lock, so the running app is not interrupted.
+ssh "$SSH_TARGET" bash -s -- "$CONTAINER" "$DB_PATH" "$BACKUP_DIR" "$NAME" "$HELPER_IMAGE" <<'REMOTE'
 set -euo pipefail
-CONTAINER="$1"; DB_PATH="$2"; STAGED="$3"; BACKUP_DIR="$4"; NAME="$5"
+CONTAINER="$1"; DB_PATH="$2"; BACKUP_DIR="$3"; NAME="$4"; HELPER_IMAGE="$5"
+DATA_DIR="$(dirname "$DB_PATH")"
+DB_FILE="$(basename "$DB_PATH")"
 
 if [ -z "$(docker ps -q -f "name=^${CONTAINER}$")" ]; then
   echo "FATAL: container ${CONTAINER} is not running — nothing to snapshot." >&2
   exit 1
 fi
 
-docker exec "$CONTAINER" sh -c '
-  set -e
-  command -v sqlite3 >/dev/null 2>&1 || {
-    echo "    (installing sqlite3 in the container — not baked into the image)"
-    apt-get update -qq >/dev/null 2>&1
-    apt-get install -y -qq sqlite3 >/dev/null 2>&1
-  }
-'
-
-docker exec "$CONTAINER" sqlite3 "$DB_PATH" ".backup '${STAGED}'"
-
-CHECK="$(docker exec "$CONTAINER" sqlite3 "$STAGED" 'PRAGMA integrity_check;')"
-if [ "$CHECK" != "ok" ]; then
-  echo "FATAL: snapshot failed integrity_check: ${CHECK}" >&2
-  docker exec "$CONTAINER" rm -f "$STAGED" || true
+# `.Source` is the host path for a bind mount AND for a named volume (the
+# latter under /var/lib/docker/volumes/<name>/_data), so one lookup covers both.
+HOST_DATA_DIR="$(docker inspect "$CONTAINER" \
+  --format '{{range .Mounts}}{{if eq .Destination "'"$DATA_DIR"'"}}{{.Source}}{{end}}{{end}}')"
+if [ -z "$HOST_DATA_DIR" ] || [ ! -d "$HOST_DATA_DIR" ]; then
+  echo "FATAL: could not resolve the host path for ${DATA_DIR} in ${CONTAINER}." >&2
   exit 1
 fi
-echo "    integrity_check: ok"
 
-# A snapshot nobody can describe is a snapshot nobody trusts — record what is
-# in it next to it, so a restore decision does not need a running app.
-docker exec "$CONTAINER" sqlite3 "$STAGED" "
-  SELECT 'courses='        || (SELECT COUNT(*) FROM courses)
-      || ' assignments='   || (SELECT COUNT(*) FROM assignments)
-      || ' extractions='   || (SELECT COUNT(*) FROM syllabus_extractions)
-      || ' feeds='         || (SELECT COUNT(*) FROM calendar_feeds)
-      || ' tables='        || (SELECT COUNT(*) FROM sqlite_master WHERE type='table')
-      || ' schema_version='|| (SELECT COALESCE(MAX(version), 0) FROM _sqlx_migrations);
+docker run --rm -v "${HOST_DATA_DIR}:/data" "$HELPER_IMAGE" sh -c "
+  set -e
+  apk add --no-cache sqlite >/dev/null 2>&1
+  sqlite3 '/data/${DB_FILE}' \".backup '/data/.snapshot.db'\"
+  CHECK=\$(sqlite3 /data/.snapshot.db 'PRAGMA integrity_check;')
+  if [ \"\$CHECK\" != 'ok' ]; then
+    echo \"FATAL: snapshot failed integrity_check: \$CHECK\" >&2
+    rm -f /data/.snapshot.db
+    exit 1
+  fi
+  echo '    integrity_check: ok'
+  # A snapshot nobody can describe is a snapshot nobody trusts — print what is
+  # in it so a restore decision does not need a running app.
+  sqlite3 /data/.snapshot.db \"
+    SELECT '    ' || 'courses='   || (SELECT COUNT(*) FROM courses)
+        || ' assignments='        || (SELECT COUNT(*) FROM assignments)
+        || ' extractions='        || (SELECT COUNT(*) FROM syllabus_extractions)
+        || ' decks='              || (SELECT COUNT(*) FROM decks)
+        || ' cards='              || (SELECT COUNT(*) FROM cards)
+        || ' tables='             || (SELECT COUNT(*) FROM sqlite_master WHERE type='table')
+        || ' schema_version='     || (SELECT COALESCE(MAX(version), 0) FROM _sqlx_migrations);\"
 "
 
 mkdir -p "$BACKUP_DIR"
-docker cp "${CONTAINER}:${STAGED}" "${BACKUP_DIR}/${NAME}"
-docker exec "$CONTAINER" rm -f "$STAGED"
+mv "${HOST_DATA_DIR}/.snapshot.db" "${BACKUP_DIR}/${NAME}"
 echo "    on VPS: ${BACKUP_DIR}/${NAME} ($(stat -c %s "${BACKUP_DIR}/${NAME}") bytes)"
 REMOTE
 
