@@ -144,6 +144,35 @@ Both scripts honour `CM_SSH_TARGET`, `CM_CONTAINER`, `CM_DB_PATH` and
 `CM_BACKUP_DIR`, which is also how the restore path gets exercised against a
 throwaway container instead of production.
 
+### A green build does not mean a deploy
+
+`build-and-push.yml` has **two** jobs. "Build and push" can go green while
+"Deploy to VPS" fails, and the run summary is easy to misread — `gh run list`
+shows the run, not the job. Always confirm the container actually restarted:
+
+```bash
+ssh root@95.216.166.108 'docker inspect coursemaster-api-1 --format "{{.Created}} restarts:{{.RestartCount}}"'
+```
+
+A container still showing `Up 4 weeks` after a push means the deploy silently
+did nothing, and any migration in that push has **not** applied.
+
+### `error from registry: denied` when pulling a *public* image
+
+Seen on the 0005 deploy. The image is public, yet `docker compose pull` on the
+VPS failed with `denied`, because `/root/.docker/config.json` still held a
+`ghcr.io` auth entry whose token had since expired — Docker sends a stored
+credential even for an anonymous-capable pull, and the registry rejects the
+request outright rather than falling back.
+
+```bash
+ssh root@95.216.166.108 'docker logout ghcr.io && docker pull ghcr.io/beep242/coursemaster-api:latest'
+```
+
+The old config is backed up alongside it as `config.json.bak-<timestamp>`. If
+the package is ever made private this has to be reversed — log in with a PAT
+that has `read:packages`, and the deploy job needs a `docker login` step.
+
 ## Local development against a local server
 
 ```bash

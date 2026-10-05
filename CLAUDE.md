@@ -128,4 +128,9 @@ is configured (no rustfmt.toml, clippy.toml, or eslint config).
 - Do not rebind the prod container to `127.0.0.1:8080` — Caddy reaches it via `host.docker.internal` from the
   bridge network; a loopback-only bind causes a silent 502.
 - Pushing to `main` triggers `build-and-push.yml` (GHCR push + SSH restart on the VPS): a push to main is a
-  production deploy. `data/coursemaster.db` is local dev only (`*.db` is gitignored).
+  production deploy. It has **two jobs** — "Build and push" can go green while "Deploy to VPS" fails, so
+  confirm the container actually restarted (`docker inspect ... RestartCount`/`Created`) rather than trusting
+  the run. A container still showing `Up 4 weeks` after a push means no migration in it applied. The 0005
+  deploy failed exactly this way: `docker compose pull` returned `error from registry: denied` for a *public*
+  image, because the VPS still had an expired `ghcr.io` entry in `/root/.docker/config.json` and Docker sends
+  a stored credential rather than falling back to anonymous. `docker logout ghcr.io` fixed it — see DEPLOY.md. `data/coursemaster.db` is local dev only (`*.db` is gitignored).
