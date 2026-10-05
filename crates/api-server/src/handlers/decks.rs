@@ -309,3 +309,56 @@ pub async fn prepare_distractors(
         total_cost_usd: report.total_cost_usd,
     }))
 }
+
+#[derive(Debug, Deserialize)]
+pub struct UploadBody {
+    pub filename: String,
+    /// The file, base64-encoded. JSON rather than multipart because
+    /// `ui/src/api.ts` hardcodes `Content-Type: application/json` for every
+    /// call, and a second transport would be a second thing to keep correct.
+    pub content_base64: String,
+    #[serde(default)]
+    pub count: Option<usize>,
+}
+
+/// Uploads a PDF, Word document or slide deck, extracts its text, and generates
+/// cards from it into the deck's review queue.
+///
+/// Extraction happens here and the result is handed to the same
+/// `generate_cards` the paste path uses — a document is just another way to
+/// obtain text, and giving it a separate generation path would mean two prompts
+/// to keep in agreement.
+pub async fn upload_document(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(deck_id): Path<String>,
+    Json(body): Json<UploadBody>,
+) -> Result<Json<CardImport>, ApiError> {
+    use base64::Engine;
+
+    let deck = decks::get(&state.pool, &deck_id)
+        .await?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("no deck {deck_id}")))?;
+
+    // Browsers hand back a `data:` URL from FileReader; accept either form.
+    let payload = body.content_base64.split_once(";base64,").map_or(body.content_base64.as_str(), |(_, rest)| rest);
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(payload.trim())
+        .map_err(|_| ApiError::new(StatusCode::BAD_REQUEST, "that upload was not valid base64"))?;
+
+    let (kind, text) = document_engine::extract_document(&bytes, Some(&body.filename))?;
+    tracing::info!("extracted {} chars from {} ({})", text.chars().count(), body.filename, kind.as_str());
+
+    Ok(Json(
+        document_engine::generate_cards(
+            &state.pool,
+            state.ai.as_ref(),
+            &deck_id,
+            Some(&body.filename),
+            &deck.name,
+            &text,
+            body.count,
+        )
+        .await?,
+    ))
+}

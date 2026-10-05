@@ -82,6 +82,8 @@ function resolveRequest(cmd: string, args: Record<string, unknown>): Req {
       return { method: "POST", path: `/decks/${encodeURIComponent(String(args.deckId))}/import-text`, body: args.input };
     case "prepare_distractors":
       return { method: "POST", path: `/decks/${encodeURIComponent(String(args.deckId))}/distractors` };
+    case "upload_document":
+      return { method: "POST", path: `/decks/${encodeURIComponent(String(args.deckId))}/imports/file`, body: args.input };
     case "list_imports":
       return { method: "GET", path: `/decks/${encodeURIComponent(String(args.deckId))}/imports` };
     case "list_candidates":

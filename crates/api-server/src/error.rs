@@ -61,6 +61,8 @@ impl From<document_engine::DocumentError> for ApiError {
             // The model ran but produced nothing usable. Not the caller's
             // fault, and not the gateway being unreachable either.
             D::EmptyGeneration(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            // The caller's file, not the server's problem.
+            D::Unreadable(_) => StatusCode::BAD_REQUEST,
             // The AI subprocess genuinely failed, timed out, or is unavailable.
             D::Ai(_) => StatusCode::BAD_GATEWAY,
             D::FeedFetch(_) => StatusCode::BAD_GATEWAY,

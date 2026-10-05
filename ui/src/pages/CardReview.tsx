@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import invoke from "../api";
 import type { CandidateEdits, CardCandidate, CardImport, ImportTextResult } from "../types";
-import { IconCheck, IconSparkle, IconX } from "../icons";
+import { IconCheck, IconDoc, IconSparkle, IconX } from "../icons";
 
 interface Props {
   deckId: string;
@@ -44,6 +44,7 @@ export function CardReview({ deckId, deckName, onCardsChanged }: Props) {
   const [pasteResult, setPasteResult] = useState<ImportTextResult | null>(null);
   const [importing, setImporting] = useState(false);
   const [preparing, setPreparing] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [prepareResult, setPrepareResult] = useState<string | null>(null);
 
   async function load() {
@@ -156,6 +157,31 @@ export function CardReview({ deckId, deckName, onCardsChanged }: Props) {
     }
   }
 
+  async function uploadFile(file: File) {
+    setUploading(true);
+    setError(null);
+    try {
+      // FileReader gives a data: URL; the API accepts either that or bare
+      // base64, so no stripping is needed here.
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("could not read that file"));
+        reader.readAsDataURL(file);
+      });
+      await invoke<CardImport>("upload_document", {
+        deckId,
+        input: { filename: file.name, content_base64: dataUrl, count },
+      });
+      await load();
+    } catch (e) {
+      setError(String(e));
+      await load();
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function prepareChoice() {
     setPreparing(true);
     setError(null);
@@ -213,11 +239,30 @@ export function CardReview({ deckId, deckName, onCardsChanged }: Props) {
         </div>
         <label className="field-label">Material</label>
         <textarea rows={8} value={material} onChange={(e) => setMaterial(e.target.value)} placeholder="Paste your notes here…" />
-        <div className="row" style={{ justifyContent: "flex-end" }}>
-          <button type="button" disabled={generating || !material.trim()} onClick={generate}>
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <label className="btn-secondary" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <IconDoc /> {uploading ? "Reading the file…" : "Upload a PDF, Word doc or slides"}
+            <input
+              type="file"
+              accept=".pdf,.docx,.pptx,application/pdf"
+              style={{ display: "none" }}
+              disabled={uploading || generating}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                // Cleared so picking the same file twice still fires a change.
+                e.target.value = "";
+                if (file) uploadFile(file);
+              }}
+            />
+          </label>
+          <button type="button" disabled={generating || uploading || !material.trim()} onClick={generate}>
             <IconSparkle /> {generating ? "Writing cards… (up to 3 min)" : "Generate cards"}
           </button>
         </div>
+        <p className="hint" style={{ marginBottom: 0 }}>
+          A PDF needs a real text layer — a scan of a page has none, and the app will tell you so rather than
+          guessing.
+        </p>
       </div>
 
       <div className="card">

@@ -17,3 +17,9 @@ ical = "0.11"
 chrono = { workspace = true }
 grading.workspace = true
 chrono-tz = "0.10.4"
+pdf-extract = "0.12.1"
+# deflate only: DOCX and PPTX are deflate-compressed zips, and the default
+# feature set drags in zstd-sys and bzip2-sys -- native C that would add a
+# compiler toolchain to the Docker build for formats this never sees.
+zip = { version = "8", default-features = false, features = ["deflate"] }
+quick-xml = { version = "0.42", default-features = false }

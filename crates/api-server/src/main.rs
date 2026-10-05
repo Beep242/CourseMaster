@@ -20,7 +20,11 @@ use state::AppState;
 /// Bodies larger than this are rejected. Set explicitly because axum's own
 /// default is 2 MiB, which silently truncated pasted syllabus and note text
 /// long before anything in the app said so.
-const DEFAULT_MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
+// Documents arrive base64-encoded inside JSON, which inflates them by about a
+// third, so this has to clear document-engine's 15 MB document cap with room to
+// spare. Multipart would avoid the inflation but needs a second fetch path in
+// api.ts, which hardcodes JSON for every call.
+const DEFAULT_MAX_REQUEST_BYTES: usize = 24 * 1024 * 1024;
 
 fn env_or(key: &str, default: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| default.to_string())
@@ -131,6 +135,7 @@ async fn main() {
             get(handlers::decks::list_imports).post(handlers::decks::generate_cards),
         )
         .route("/decks/{id}/import-text", post(handlers::decks::import_text))
+        .route("/decks/{id}/imports/file", post(handlers::decks::upload_document))
         .route("/decks/{id}/distractors", post(handlers::decks::prepare_distractors))
         .route("/imports/{id}/candidates", get(handlers::decks::list_candidates))
         .route("/imports/{id}/approve-all", post(handlers::decks::approve_all))

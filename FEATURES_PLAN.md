@@ -962,6 +962,46 @@ screen.
 
 Still exactly two npm runtime dependencies.
 
+### ✅ Increments 15–16 — PDF, Word and slide-deck import
+
+**15 — the extractors, written first and wired to nothing.** `extract.rs` is
+pure functions over bytes, so if `pdf-extract` mangled a two-column handout that
+would cost one module to discover rather than being found after upload
+transport, staging and a review screen were all built on the assumption it works.
+
+All three are **pure Rust** — no native toolchain added to the Docker build. The
+default `zip` feature set drags in `zstd-sys` and `bzip2-sys`, so it is pinned to
+`deflate` only, which is all an Office file uses. Verified: no `-sys` crates in
+the lockfile.
+
+- Format is **sniffed from the bytes**, not the filename — an extension is a
+  claim. A PDF named `.docx` is still read as a PDF.
+- PPTX slides are sorted **numerically**, so `slide10` doesn't land between
+  `slide1` and `slide2` and scramble the lecture.
+- DOCX runs are joined, since Word splits a sentence across runs constantly.
+- `extract_pdf` wraps `pdf-extract` in `catch_unwind` — it panics on some
+  malformed files, and this binary runs under `panic = "abort"`, so a bad upload
+  would otherwise take the whole server down.
+- A document yielding under 40 characters is reported as *"almost no selectable
+  text — if it is a scan, there is no text layer"* rather than being sent to the
+  model to generate cards from noise.
+
+**16 — upload transport.** Base64 inside the existing JSON path, because
+`api.ts` hardcodes `Content-Type: application/json` and a second transport is a
+second thing to keep correct. Request limit raised to 24 MiB to clear the 15 MB
+document cap plus base64's ~33% inflation. Extraction hands its text to the
+*same* `generate_cards` the paste path uses — a document is just another way to
+obtain text, and a separate path would mean two prompts to keep in agreement.
+
+**Fixed a bug this testing exposed:** uploading a `.txt` returned
+**"couldn't reach the calendar feed"** with a 502, because extraction reused
+`DocumentError::FeedFetch`. There is now a distinct `Unreadable` variant mapping
+to **400** with a sensible message.
+
+**11 extraction tests**, built against real zip containers rather than mocks.
+Verified end to end: a real `.docx` extracted and reached generation; a `.txt`
+was refused with 400; malformed base64 gave 400.
+
 ### Remaining
 
 Status line per increment as each lands, plus anything deferred. Next:
