@@ -1,6 +1,7 @@
 pub mod calendar_feed;
 pub mod card_generation;
 pub mod deck_import;
+pub mod distractors;
 pub mod error;
 pub mod practice_test;
 pub mod study_guide;
@@ -8,6 +9,7 @@ pub mod syllabus_extraction;
 
 pub use calendar_feed::{detect_course_groups, link_course_from_group, sync_feed, DetectedCourseGroup};
 pub use card_generation::generate_cards;
+pub use distractors::{prepare_deck as prepare_distractors, DistractorReport};
 pub use deck_import::{preview as preview_deck_import, FieldSeparator, ImportPreview, ParsedPair};
 pub use error::DocumentError;
 pub use practice_test::{generate_practice_test, grade_attempt};

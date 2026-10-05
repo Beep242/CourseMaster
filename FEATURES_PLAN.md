@@ -847,6 +847,36 @@ alphanumeric), so `6.022 × 10^23` arrives as `6.022 10 23` — requiring the si
 would have missed the very form most likely to be typed. A real unit is still
 safe: `5 x 10 apples` is not an exponent.
 
+### ✅ Increment 18 — Multiple choice and mixed modes
+
+Four modes on the Review page: **Flip · Type · Multiple choice · Mixed**.
+
+Distractors are generated **once per deck, ahead of time**, by a *Prepare
+options* button — never during a review. A review that waited on `claude -p`
+would cost money per card and stall for seconds mid-session; options live in
+`cards.options_json` so answering is a pure comparison. One AI call covers 25
+cards rather than one call per card, since per-call overhead dominates at this
+size.
+
+The generator drops any "wrong" answer that is actually the correct one
+(compared through `grading::normalize`, so "Mitochondria." does not slip past
+"mitochondria") — two right options would make the question unanswerable — and
+drops duplicates. A card it can produce nothing usable for stays a plain card
+rather than becoming a broken question. Cards already having options are left
+alone, so re-running is cheap.
+
+**Mixed** asks each card the way it best supports: multiple choice when it has
+options, typed otherwise. Choice mode falls back to typing rather than refusing
+to show a card with no options yet.
+
+Options are **shuffled for display**, seeded off the card id so the order is
+stable while the card is on screen — storage puts the correct answer first, so
+showing stored order would give it away.
+
+**7 new tests.** Verified in the browser: options rendered shuffled (the stored-
+first correct answer appeared last), picking a wrong one showed "Not quite",
+revealed the card, and outlined **Again**.
+
 ### Remaining
 
 Status line per increment as each lands, plus anything deferred. Next:

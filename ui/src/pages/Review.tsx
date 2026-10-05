@@ -21,6 +21,22 @@ function humanInterval(days: number): string {
   return `${(days / 365).toFixed(1)} yr`;
 }
 
+/** Shuffles the options for display. Storage puts the correct answer first, so
+ *  showing them in stored order would give it away immediately. Seeded off the
+ *  card id so the order is stable while a card is on screen rather than
+ *  reshuffling on every React render. */
+function shuffleForCard<T>(items: T[], seed: string): T[] {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    h = (h * 1103515245 + 12345) >>> 0;
+    const j = h % (i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 const GRADES: { rating: Rating; label: string; key: string; className: string }[] = [
   { rating: "again", label: "Again", key: "1", className: "btn-danger" },
   { rating: "hard", label: "Hard", key: "2", className: "btn-secondary" },
@@ -57,7 +73,12 @@ export function Review({ courseId, emptyHint }: Props) {
 
   /** Flip through, or type the answer and have it checked. Typing is graded by
    *  the deterministic matcher, so it costs nothing and answers instantly. */
-  const [mode, setMode] = useState<"flip" | "type">("flip");
+  const [mode, setMode] = useState<"flip" | "type" | "choice" | "mixed">("flip");
+  const [picked, setPicked] = useState<string | null>(null);
+  /// Read by the global key handler, which is installed before `effectiveMode`
+  /// is computed further down. A ref rather than state: it must not re-run the
+  /// effect, only be current when a key is actually pressed.
+  const effectiveModeRef = useRef<"flip" | "type" | "choice">("flip");
   const [typed, setTyped] = useState("");
   const [checked, setChecked] = useState<CheckAnswerResult | null>(null);
   const [checking, setChecking] = useState(false);
@@ -76,6 +97,7 @@ export function Review({ courseId, emptyHint }: Props) {
       setFlipped(false);
       setTyped("");
       setChecked(null);
+      setPicked(null);
       shownAt.current = Date.now();
     } catch (e) {
       setError(String(e));
@@ -113,6 +135,7 @@ export function Review({ courseId, emptyHint }: Props) {
         setFlipped(false);
         setTyped("");
         setChecked(null);
+        setPicked(null);
         setIndex((i) => i + 1);
         shownAt.current = Date.now();
       } catch (e) {
@@ -156,7 +179,7 @@ export function Review({ courseId, emptyHint }: Props) {
       if (!card) return;
       // While typing an answer, the keyboard belongs to the input — grabbing
       // Space would make the field unusable.
-      if (mode === "type" && !checked) return;
+      if (effectiveModeRef.current === "type" && !checked) return;
       if (e.key === " " || e.key === "Enter") {
         e.preventDefault();
         setFlipped((f) => !f);
@@ -212,6 +235,26 @@ export function Review({ courseId, emptyHint }: Props) {
   }
 
   const courseName = card.course_name ?? courses.find((c) => c.id === courseId)?.name;
+  const hasOptions = (card.options?.length ?? 0) >= 2;
+  // In mixed, each card is asked the way it best supports: multiple choice when
+  // it has options, otherwise typed. Choice mode falls back to typing too,
+  // rather than refusing to show a card that has no options yet.
+  const effectiveMode: "flip" | "type" | "choice" =
+    mode === "mixed" ? (hasOptions ? "choice" : "type") : mode === "choice" && !hasOptions ? "type" : mode;
+  effectiveModeRef.current = effectiveMode;
+
+  async function pickOption(option: string) {
+    if (picked || !card) return;
+    setPicked(option);
+    setError(null);
+    try {
+      const result = await invoke<CheckAnswerResult>("check_answer", { id: card.id, answer: option });
+      setChecked(result);
+      setFlipped(true);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
 
   return (
     <div className="study-stage">
@@ -262,9 +305,34 @@ export function Review({ courseId, emptyHint }: Props) {
             setMode("type");
             setFlipped(false);
             setChecked(null);
+            setPicked(null);
           }}
         >
-          Type the answer
+          Type
+        </button>
+        <button
+          type="button"
+          className={`tab-item ${mode === "choice" ? "active" : ""}`}
+          onClick={() => {
+            setMode("choice");
+            setFlipped(false);
+            setChecked(null);
+            setPicked(null);
+          }}
+        >
+          Multiple choice
+        </button>
+        <button
+          type="button"
+          className={`tab-item ${mode === "mixed" ? "active" : ""}`}
+          onClick={() => {
+            setMode("mixed");
+            setFlipped(false);
+            setChecked(null);
+            setPicked(null);
+          }}
+        >
+          Mixed
         </button>
       </div>
 
@@ -330,7 +398,26 @@ export function Review({ courseId, emptyHint }: Props) {
             </button>
           ))}
         </div>
-      ) : mode === "type" ? (
+      ) : effectiveMode === "choice" ? (
+        <div className="study-controls" style={{ flexDirection: "column", alignItems: "stretch" }}>
+          {shuffleForCard(card.options ?? [], card.id).map((option) => {
+            const isCorrect = checked && option === checked.accepted;
+            const isWrongPick = picked === option && checked?.verdict !== "correct";
+            return (
+              <button
+                key={option}
+                type="button"
+                className={picked ? (isCorrect ? "" : isWrongPick ? "btn-danger" : "btn-secondary") : "btn-secondary"}
+                disabled={!!picked}
+                onClick={() => pickOption(option)}
+                style={{ textAlign: "left", justifyContent: "flex-start" }}
+              >
+                {option}
+              </button>
+            );
+          })}
+        </div>
+      ) : effectiveMode === "type" ? (
         <div style={{ width: "100%", maxWidth: 640 }}>
           <input
             value={typed}

@@ -43,6 +43,8 @@ export function CardReview({ deckId, deckName, onCardsChanged }: Props) {
   const [pasteText, setPasteText] = useState("");
   const [pasteResult, setPasteResult] = useState<ImportTextResult | null>(null);
   const [importing, setImporting] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [prepareResult, setPrepareResult] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -154,6 +156,29 @@ export function CardReview({ deckId, deckName, onCardsChanged }: Props) {
     }
   }
 
+  async function prepareChoice() {
+    setPreparing(true);
+    setError(null);
+    try {
+      const r = await invoke<{ considered: number; prepared: number; skipped: number; total_cost_usd: number | null }>(
+        "prepare_distractors",
+        { deckId },
+      );
+      setPrepareResult(
+        r.considered === 0
+          ? "Every card already has options."
+          : `${r.prepared} of ${r.considered} cards ready for multiple choice` +
+              (r.skipped ? ` · ${r.skipped} skipped` : "") +
+              (r.total_cost_usd != null ? ` · $${r.total_cost_usd.toFixed(4)}` : ""),
+      );
+      onCardsChanged();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setPreparing(false);
+    }
+  }
+
   const reviewable = imports.filter((i) => i.pending_count > 0);
   const failed = imports.filter((i) => i.status === "failed");
 
@@ -228,6 +253,22 @@ export function CardReview({ deckId, deckName, onCardsChanged }: Props) {
             {importing ? "Importing…" : "Import"}
           </button>
         </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <div className="card-header-title">
+            <h3>Multiple choice</h3>
+          </div>
+          <button type="button" className="btn-secondary" disabled={preparing} onClick={prepareChoice}>
+            <IconSparkle /> {preparing ? "Writing options…" : "Prepare options"}
+          </button>
+        </div>
+        <p className="hint" style={{ marginTop: "-0.6rem" }}>
+          Writes three plausible wrong answers for each card, once, so answering during a review stays instant and
+          free. Cards that already have options are left alone.
+        </p>
+        {prepareResult && <p className="hint">{prepareResult}</p>}
       </div>
 
       {error && <div className="error-banner">{error}</div>}

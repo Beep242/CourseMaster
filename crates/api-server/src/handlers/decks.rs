@@ -281,3 +281,31 @@ pub async fn import_text(
         sample: preview.pairs.into_iter().take(5).collect(),
     }))
 }
+
+#[derive(Debug, Serialize)]
+pub struct DistractorResponse {
+    pub considered: usize,
+    pub prepared: usize,
+    pub skipped: usize,
+    pub total_cost_usd: Option<f64>,
+}
+
+/// Generates multiple-choice options for a whole deck ahead of time. Doing it
+/// here rather than during a review is what keeps answering a card free and
+/// instant.
+pub async fn prepare_distractors(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(deck_id): Path<String>,
+) -> Result<Json<DistractorResponse>, ApiError> {
+    if decks::get(&state.pool, &deck_id).await?.is_none() {
+        return Err(ApiError::new(StatusCode::NOT_FOUND, format!("no deck {deck_id}")));
+    }
+    let report = document_engine::prepare_distractors(&state.pool, state.ai.as_ref(), &deck_id).await?;
+    Ok(Json(DistractorResponse {
+        considered: report.considered,
+        prepared: report.prepared,
+        skipped: report.skipped,
+        total_cost_usd: report.total_cost_usd,
+    }))
+}
